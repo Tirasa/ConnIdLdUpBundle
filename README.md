@@ -34,12 +34,12 @@ The LdUp bundle is part of the [ConnId](http://connid.tirasa.net) project.
 ```XML
 <dependency>
   <groupId>net.tirasa.connid.bundles</groupId>
-  <artifactId>net.tirasa.connid.bundles.LdUp</artifactId>
-  <version>${connid.LdUp.version}</version>
+  <artifactId>net.tirasa.connid.bundles.ldup</artifactId>
+  <version>${connid.ldup.version}</version>
 </dependency>
 ```
 
-where `connid.LdUp.version` is one of [available](http://repo1.maven.org/maven2/net/tirasa/connid/bundles/net.tirasa.connid.bundles.LdUp/).
+where `connid.ldup.version` is one of [available](http://repo1.maven.org/maven2/net/tirasa/connid/bundles/net.tirasa.connid.bundles.ldup/).
 
 ### Downloads
 
