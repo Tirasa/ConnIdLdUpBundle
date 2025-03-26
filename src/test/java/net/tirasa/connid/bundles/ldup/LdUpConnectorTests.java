@@ -34,10 +34,12 @@ import org.identityconnectors.framework.common.objects.AttributeInfo;
 import org.identityconnectors.framework.common.objects.AttributeInfo.Flags;
 import org.identityconnectors.framework.common.objects.AttributeUtil;
 import org.identityconnectors.framework.common.objects.ConnectorObject;
+import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfo;
 import org.identityconnectors.framework.common.objects.OperationOptionsBuilder;
 import org.identityconnectors.framework.common.objects.Schema;
+import org.identityconnectors.framework.common.objects.Uid;
 import org.identityconnectors.test.common.TestHelpers;
 import org.junit.jupiter.api.Test;
 import org.ldaptive.AddOperation;
@@ -160,10 +162,12 @@ class LdUpConnectorTests {
     private static void doLiveSync(
             final ConnectorFacade connector,
             final List<ConnectorObject> processed,
-            final String cookie) {
+            final String cookie,
+            final String... attrsToGet) {
 
         OperationOptionsBuilder oob = new OperationOptionsBuilder();
         Optional.ofNullable(cookie).ifPresent(oob::setPagedResultsCookie);
+        Optional.ofNullable(attrsToGet).ifPresent(oob::setAttributesToGet);
 
         connector.livesync(
                 new ObjectClass(INET_ORG_PERSON_CLASS),
@@ -209,13 +213,19 @@ class LdUpConnectorTests {
 
         ConnectorFacade connector = newFacade();
         List<ConnectorObject> processed = new ArrayList<>();
-        doLiveSync(connector, processed, null);
+        doLiveSync(connector, processed, null,
+                Uid.NAME, Name.NAME, "uid", "sn", "givenName", "mail", LdUpConnector.SYNCREPL_COOKIE_NAME);
 
         // 2 predefined users in the Docker image + 1 as crated above
         assertEquals(3, processed.size());
 
         assertTrue(processed.stream().
                 allMatch(object -> INET_ORG_PERSON_CLASS.equals(object.getObjectClass().getObjectClassValue())));
+        assertTrue(processed.stream().allMatch(o -> o.getAttributeByName(LdUpConnector.SYNCREPL_COOKIE_NAME) != null));
+        assertTrue(processed.stream().allMatch(o -> o.getAttributeByName("uid") != null));
+        assertTrue(processed.stream().allMatch(o -> o.getAttributeByName("sn") != null));
+        assertTrue(processed.stream().anyMatch(o -> o.getAttributeByName("givenName") != null));
+        assertTrue(processed.stream().anyMatch(o -> o.getAttributeByName("mail") != null));
 
         String cookie = AttributeUtil.getStringValue(
                 processed.get(0).getAttributeByName(LdUpConnector.SYNCREPL_COOKIE_NAME));

@@ -18,7 +18,6 @@ package net.tirasa.connid.bundles.ldup;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +38,7 @@ import org.identityconnectors.framework.common.objects.AttributeUtil;
 import org.identityconnectors.framework.common.objects.ConnectorObjectBuilder;
 import org.identityconnectors.framework.common.objects.LiveSyncDeltaBuilder;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
+import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfoBuilder;
 import org.identityconnectors.framework.common.objects.OperationOptions;
@@ -55,11 +55,13 @@ import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
 import org.ldaptive.LdapException;
 import org.ldaptive.PooledConnectionFactory;
+import org.ldaptive.ReturnAttributes;
 import org.ldaptive.SearchOperation;
 import org.ldaptive.SearchRequest;
 import org.ldaptive.SearchResponse;
 import org.ldaptive.SearchScope;
 import org.ldaptive.SimpleBindRequest;
+import org.ldaptive.SingleConnectionFactory;
 import org.ldaptive.control.SyncDoneControl;
 import org.ldaptive.control.SyncStateControl;
 import org.ldaptive.control.util.DefaultCookieManager;
@@ -77,6 +79,8 @@ public class LdUpConnector
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
 
     protected static final String SYNCREPL_COOKIE_NAME = AttributeUtil.createSpecialName("SYNCREPL_COOKIE");
+
+    protected static final Set<String> NON_RETURN_ATTRS = Set.of(Uid.NAME, Name.NAME, SYNCREPL_COOKIE_NAME);
 
     protected LdUpConfiguration configuration;
 
@@ -152,10 +156,12 @@ public class LdUpConnector
 
     @Override
     public void dispose() {
-        try {
-            connectionFactory.close();
-        } catch (Exception e) {
-            LOG.error(e, "While closing the connection factory");
+        if (connectionFactory.isInitialized()) {
+            try {
+                connectionFactory.close();
+            } catch (Exception e) {
+                LOG.error(e, "While closing the connection factory");
+            }
         }
     }
 
@@ -242,15 +248,13 @@ public class LdUpConnector
             final LiveSyncResultsHandler handler,
             final OperationOptions options) {
 
-        byte[] inCookie = Optional.ofNullable(options.getPagedResultsCookie()).
-                map(String::getBytes).
-                orElse(null);
-        LOG.ok("Received cookie: {0}", inCookie == null ? null : Base64.getEncoder().encodeToString(inCookie));
-
         List<ConnectorObjectBuilder> objects = new ArrayList<>();
 
-        SyncReplClient client = new SyncReplClient(connectionFactory, false);
+        SingleConnectionFactory scf = new SingleConnectionFactory(connectionConfig());
+        SyncReplClient client = new SyncReplClient(scf, false);
         try {
+            scf.initialize();
+
             client.setOnEntry(entry -> {
                 LOG.ok("SyncRepl entry received: {0}", entry);
 
@@ -265,9 +269,9 @@ public class LdUpConnector
                 switch (ssc.getSyncState()) {
                     case ADD:
                     case MODIFY:
-                        entry.getAttributes().forEach(attr -> AttributeBuilder.build(
+                        entry.getAttributes().forEach(attr -> object.addAttribute(AttributeBuilder.build(
                                 attr.getName(),
-                                attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues()));
+                                attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues())));
                         objects.add(object);
                         break;
 
@@ -288,6 +292,7 @@ public class LdUpConnector
                                             dn(configuration.getBaseDn()).
                                             scope(SearchScope.SUBTREE).
                                             filter("entryUUID=" + entryUUID.toString()).
+                                            returnAttributes(ReturnAttributes.NONE.value()).
                                             build());
                             if (response.isSuccess()) {
                                 if (response.getEntries().isEmpty()) {
@@ -299,7 +304,7 @@ public class LdUpConnector
                                             setUid(uid).
                                             setName(uid.getUidValue()));
                                 } else {
-                                    LOG.ok("Match while searching for entryUUID={0}: discard", entryUUID);
+                                    LOG.ok("Match found while searching for entryUUID={0}: discard", entryUUID);
                                 }
                             } else {
                                 LOG.warn("Unsuccessful response while searching for entryUUID={0}: {1}",
@@ -321,21 +326,26 @@ public class LdUpConnector
             });
             client.setOnException(e -> LOG.error(e, "SyncRepl exception thrown"));
 
-            DefaultCookieManager cookieManager = new DefaultCookieManager();
-            Optional.ofNullable(inCookie).ifPresent(cookieManager::writeCookie);
+            SearchRequest.Builder searchRequestBuilder = SearchRequest.builder().
+                    dn(configuration.getBaseDn()).
+                    scope(SearchScope.SUBTREE).
+                    filter("objectClass=" + objectClass.getObjectClassValue());
+            Optional.ofNullable(options.getAttributesToGet()).
+                    map(attrs -> Stream.of(attrs).
+                    filter(attr -> !NON_RETURN_ATTRS.contains(attr)).
+                    collect(Collectors.toSet())).
+                    ifPresent(searchRequestBuilder::returnAttributes);
 
-            client.send(
-                    SearchRequest.builder().
-                            dn(configuration.getBaseDn()).
-                            scope(SearchScope.SUBTREE).
-                            filter("objectClass=" + objectClass.getObjectClassValue()).
-                            build(),
-                    cookieManager).
-                    await();
+            DefaultCookieManager cookieManager = new DefaultCookieManager();
+            Optional.ofNullable(options.getPagedResultsCookie()).
+                    map(String::getBytes).ifPresent(cookieManager::writeCookie);
+
+            client.send(searchRequestBuilder.build(), cookieManager).await();
         } catch (LdapException e) {
-            throw new ConnectorException("While managing SyncRepl events for " + objectClass.getObjectClassValue(), e);
+            throw new ConnectorException("While managing SyncRepl events for " + objectClass, e);
         } finally {
             client.close();
+            scf.close();
         }
 
         objects.forEach(object -> handler.handle(new LiveSyncDeltaBuilder().setObject(object.build()).build()));
