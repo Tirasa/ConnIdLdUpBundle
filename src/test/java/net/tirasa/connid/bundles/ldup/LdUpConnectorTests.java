@@ -179,7 +179,7 @@ class LdUpConnectorTests {
     }
 
     @Test
-    void livesync() throws LdapException, InterruptedException {
+    void livesync() throws LdapException {
         LdUpConfiguration conf = newConfiguration();
 
         ConnectionConfig connectionConfig = ConnectionConfig.builder().
@@ -283,5 +283,23 @@ class LdUpConnectorTests {
 
         cookie = AttributeUtil.getStringValue(processed.get(0).getAttributeByName(LdUpConnector.SYNCREPL_COOKIE_NAME));
         assertNotNull(cookie);
+    }
+
+    @Test
+    void getLatestSyncToken() {
+        assertNotNull(newFacade().getLatestSyncToken(new ObjectClass("groupOfUniqueNames")));
+    }
+
+    @Test
+    void sync() {
+        newFacade().sync(
+                new ObjectClass("groupOfUniqueNames"),
+                null,
+                delta -> {
+                    assertNotNull(delta.getToken());
+                    assertNotNull(delta.getObject());
+                    return true;
+                },
+                new OperationOptionsBuilder().build());
     }
 }

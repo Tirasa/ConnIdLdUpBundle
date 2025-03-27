@@ -23,6 +23,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.identityconnectors.common.StringUtil;
@@ -44,12 +48,17 @@ import org.identityconnectors.framework.common.objects.ObjectClassInfoBuilder;
 import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SchemaBuilder;
+import org.identityconnectors.framework.common.objects.SyncDeltaBuilder;
+import org.identityconnectors.framework.common.objects.SyncDeltaType;
+import org.identityconnectors.framework.common.objects.SyncResultsHandler;
+import org.identityconnectors.framework.common.objects.SyncToken;
 import org.identityconnectors.framework.common.objects.Uid;
 import org.identityconnectors.framework.spi.Configuration;
 import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.PoolableConnector;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
+import org.identityconnectors.framework.spi.operations.SyncOp;
 import org.identityconnectors.framework.spi.operations.TestOp;
 import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
@@ -74,7 +83,7 @@ import org.ldaptive.schema.SchemaFactory;
 
 @ConnectorClass(configurationClass = LdUpConfiguration.class, displayNameKey = "ldup.connector.display")
 public class LdUpConnector
-        implements PoolableConnector, SchemaOp, LiveSyncOp, TestOp {
+        implements PoolableConnector, SchemaOp, SyncOp, LiveSyncOp, TestOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
 
@@ -243,12 +252,47 @@ public class LdUpConnector
     }
 
     @Override
-    public void livesync(
+    public SyncToken getLatestSyncToken(final ObjectClass objectClass) {
+        AtomicReference<String> latest = new AtomicReference<>();
+
+        SingleConnectionFactory scf = new SingleConnectionFactory(connectionConfig());
+        SyncReplClient client = new SyncReplClient(scf, false);
+        try {
+            scf.initialize();
+
+            client.setOnResult(result -> {
+                LOG.ok("SyncRepl result received: {0}", result);
+
+                SyncDoneControl syncDoneControl = (SyncDoneControl) result.getControl(SyncDoneControl.OID);
+
+                latest.set(new String(syncDoneControl.getCookie()));
+            });
+            client.setOnException(e -> LOG.error(e, "SyncRepl exception thrown"));
+
+            client.send(SearchRequest.builder().
+                    dn(configuration.getBaseDn()).
+                    scope(SearchScope.SUBTREE).
+                    filter("objectClass=" + objectClass.getObjectClassValue()).build(),
+                    new DefaultCookieManager()).await();
+        } catch (LdapException e) {
+            throw new ConnectorException("While managing SyncRepl events for " + objectClass, e);
+        } finally {
+            client.close();
+            scf.close();
+        }
+
+        return Optional.ofNullable(latest.get()).map(SyncToken::new).orElse(null);
+    }
+
+    protected <T> List<T> dosync(
             final ObjectClass objectClass,
-            final LiveSyncResultsHandler handler,
+            final Function<ConnectorObjectBuilder, T> createOrUpdate,
+            final Function<UUID, T> delete,
+            final BiConsumer<T, String> outCookieReporter,
+            final byte[] cookie,
             final OperationOptions options) {
 
-        List<ConnectorObjectBuilder> objects = new ArrayList<>();
+        List<T> objects = new ArrayList<>();
 
         SingleConnectionFactory scf = new SingleConnectionFactory(connectionConfig());
         SyncReplClient client = new SyncReplClient(scf, false);
@@ -260,10 +304,9 @@ public class LdUpConnector
 
                 SyncStateControl ssc = (SyncStateControl) entry.getControl(SyncStateControl.OID);
 
-                Uid uid = new Uid(ssc.getEntryUuid().toString());
                 ConnectorObjectBuilder object = new ConnectorObjectBuilder().
                         setObjectClass(objectClass).
-                        setUid(uid).
+                        setUid(new Uid(ssc.getEntryUuid().toString())).
                         setName(entry.getDn());
 
                 switch (ssc.getSyncState()) {
@@ -272,7 +315,7 @@ public class LdUpConnector
                         entry.getAttributes().forEach(attr -> object.addAttribute(AttributeBuilder.build(
                                 attr.getName(),
                                 attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues())));
-                        objects.add(object);
+                        objects.add(createOrUpdate.apply(object));
                         break;
 
                     // this is never reported with persist == false 
@@ -298,11 +341,7 @@ public class LdUpConnector
                                 if (response.getEntries().isEmpty()) {
                                     LOG.ok("No match while searching for entryUUID={0}: it was a DELETE", entryUUID);
 
-                                    Uid uid = new Uid(entryUUID.toString());
-                                    objects.add(new ConnectorObjectBuilder().
-                                            setObjectClass(objectClass).
-                                            setUid(uid).
-                                            setName(uid.getUidValue()));
+                                    objects.add(delete.apply(entryUUID));
                                 } else {
                                     LOG.ok("Match found while searching for entryUUID={0}: discard", entryUUID);
                                 }
@@ -321,8 +360,7 @@ public class LdUpConnector
 
                 SyncDoneControl syncDoneControl = (SyncDoneControl) result.getControl(SyncDoneControl.OID);
 
-                objects.forEach(object -> object.addAttribute(AttributeBuilder.build(
-                        SYNCREPL_COOKIE_NAME, new String(syncDoneControl.getCookie()))));
+                objects.forEach(object -> outCookieReporter.accept(object, new String(syncDoneControl.getCookie())));
             });
             client.setOnException(e -> LOG.error(e, "SyncRepl exception thrown"));
 
@@ -337,8 +375,7 @@ public class LdUpConnector
                     ifPresent(searchRequestBuilder::returnAttributes);
 
             DefaultCookieManager cookieManager = new DefaultCookieManager();
-            Optional.ofNullable(options.getPagedResultsCookie()).
-                    map(String::getBytes).ifPresent(cookieManager::writeCookie);
+            Optional.ofNullable(cookie).ifPresent(cookieManager::writeCookie);
 
             client.send(searchRequestBuilder.build(), cookieManager).await();
         } catch (LdapException e) {
@@ -347,6 +384,51 @@ public class LdUpConnector
             client.close();
             scf.close();
         }
+
+        return objects;
+    }
+
+    @Override
+    public void sync(
+            final ObjectClass objectClass,
+            final SyncToken token,
+            final SyncResultsHandler handler,
+            final OperationOptions options) {
+
+        List<SyncDeltaBuilder> objects = dosync(
+                objectClass,
+                object -> new SyncDeltaBuilder().
+                        setDeltaType(SyncDeltaType.CREATE_OR_UPDATE).
+                        setObject(object.build()),
+                entryUUID -> new SyncDeltaBuilder().
+                        setDeltaType(SyncDeltaType.DELETE).
+                        setObject(new ConnectorObjectBuilder().
+                                setObjectClass(objectClass).
+                                setUid(new Uid(entryUUID.toString())).
+                                setName(entryUUID.toString()).build()),
+                (object, cookie) -> object.setToken(new SyncToken(cookie)),
+                Optional.ofNullable(token).map(t -> t.getValue().toString().getBytes()).orElse(null),
+                options);
+
+        objects.forEach(object -> handler.handle(object.build()));
+    }
+
+    @Override
+    public void livesync(
+            final ObjectClass objectClass,
+            final LiveSyncResultsHandler handler,
+            final OperationOptions options) {
+
+        List<ConnectorObjectBuilder> objects = dosync(
+                objectClass,
+                Function.identity(),
+                entryUUID -> new ConnectorObjectBuilder().
+                        setObjectClass(objectClass).
+                        setUid(new Uid(entryUUID.toString())).
+                        setName(entryUUID.toString()),
+                (object, cookie) -> object.addAttribute(AttributeBuilder.build(SYNCREPL_COOKIE_NAME, cookie)),
+                Optional.ofNullable(options.getPagedResultsCookie()).map(String::getBytes).orElse(null),
+                options);
 
         objects.forEach(object -> handler.handle(new LiveSyncDeltaBuilder().setObject(object.build()).build()));
     }
