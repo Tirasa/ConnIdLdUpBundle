@@ -69,6 +69,8 @@ class LdUpConnectorTests {
 
     private static final String INET_ORG_PERSON_CLASS = "inetOrgPerson";
 
+    private static final String GROUP_OF_UNIQUE_NAMES_CLASS = "groupOfUniqueNames";
+
     @Container
     static GenericContainer<?> LDAP_CONTAINER = new GenericContainer<>(
             DockerImageName.parse("bitnami/openldap:2.6")).
@@ -206,7 +208,7 @@ class LdUpConnectorTests {
 
         response = new AddOperation(cf).execute(new AddRequest(
                 "cn=Group1,ou=Groups,o=isp",
-                new LdapAttribute("objectClass", "groupOfUniqueNames"),
+                new LdapAttribute("objectClass", GROUP_OF_UNIQUE_NAMES_CLASS),
                 new LdapAttribute("cn", "Group1"),
                 new LdapAttribute("uniqueMember", userDn)));
         assertTrue(response.isSuccess());
@@ -287,13 +289,12 @@ class LdUpConnectorTests {
 
     @Test
     void getLatestSyncToken() {
-        assertNotNull(newFacade().getLatestSyncToken(new ObjectClass("groupOfUniqueNames")));
+        assertNotNull(newFacade().getLatestSyncToken(new ObjectClass(GROUP_OF_UNIQUE_NAMES_CLASS)));
     }
 
     @Test
     void sync() {
-        newFacade().sync(
-                new ObjectClass("groupOfUniqueNames"),
+        newFacade().sync(new ObjectClass(GROUP_OF_UNIQUE_NAMES_CLASS),
                 null,
                 delta -> {
                     assertNotNull(delta.getToken());

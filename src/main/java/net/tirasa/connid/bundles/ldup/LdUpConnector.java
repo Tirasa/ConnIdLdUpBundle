@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -287,7 +286,7 @@ public class LdUpConnector
     protected <T> List<T> dosync(
             final ObjectClass objectClass,
             final Function<ConnectorObjectBuilder, T> createOrUpdate,
-            final Function<UUID, T> delete,
+            final Function<ConnectorObjectBuilder, T> delete,
             final BiConsumer<T, String> outCookieReporter,
             final byte[] cookie,
             final OperationOptions options) {
@@ -341,7 +340,11 @@ public class LdUpConnector
                                 if (response.getEntries().isEmpty()) {
                                     LOG.ok("No match while searching for entryUUID={0}: it was a DELETE", entryUUID);
 
-                                    objects.add(delete.apply(entryUUID));
+                                    ConnectorObjectBuilder object = new ConnectorObjectBuilder().
+                                            setObjectClass(objectClass).
+                                            setUid(new Uid(entryUUID.toString())).
+                                            setName(entryUUID.toString());
+                                    objects.add(delete.apply(object));
                                 } else {
                                     LOG.ok("Match found while searching for entryUUID={0}: discard", entryUUID);
                                 }
@@ -400,12 +403,9 @@ public class LdUpConnector
                 object -> new SyncDeltaBuilder().
                         setDeltaType(SyncDeltaType.CREATE_OR_UPDATE).
                         setObject(object.build()),
-                entryUUID -> new SyncDeltaBuilder().
+                object -> new SyncDeltaBuilder().
                         setDeltaType(SyncDeltaType.DELETE).
-                        setObject(new ConnectorObjectBuilder().
-                                setObjectClass(objectClass).
-                                setUid(new Uid(entryUUID.toString())).
-                                setName(entryUUID.toString()).build()),
+                        setObject(object.build()),
                 (object, cookie) -> object.setToken(new SyncToken(cookie)),
                 Optional.ofNullable(token).map(t -> t.getValue().toString().getBytes()).orElse(null),
                 options);
@@ -422,10 +422,7 @@ public class LdUpConnector
         List<ConnectorObjectBuilder> objects = dosync(
                 objectClass,
                 Function.identity(),
-                entryUUID -> new ConnectorObjectBuilder().
-                        setObjectClass(objectClass).
-                        setUid(new Uid(entryUUID.toString())).
-                        setName(entryUUID.toString()),
+                Function.identity(),
                 (object, cookie) -> object.addAttribute(AttributeBuilder.build(SYNCREPL_COOKIE_NAME, cookie)),
                 Optional.ofNullable(options.getPagedResultsCookie()).map(String::getBytes).orElse(null),
                 options);
