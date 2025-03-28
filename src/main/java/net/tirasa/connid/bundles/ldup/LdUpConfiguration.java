@@ -43,6 +43,8 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     private String baseDn;
 
+    private String passwordAttribute = "userPassword";
+
     @ConfigurationProperty(displayMessageKey = "url.display",
             helpMessageKey = "url.help", required = true, order = 1)
     public String getUrl() {
@@ -141,6 +143,16 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     public void setBaseDn(final String baseDn) {
         this.baseDn = baseDn;
+    }
+
+    @ConfigurationProperty(displayMessageKey = "passwordAttribute.display",
+            helpMessageKey = "passwordAttribute.help", required = true, order = 11)
+    public String getPasswordAttribute() {
+        return passwordAttribute;
+    }
+
+    public void setPasswordAttribute(final String passwordAttribute) {
+        this.passwordAttribute = passwordAttribute;
     }
 
     @Override

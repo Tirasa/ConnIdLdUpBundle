@@ -38,13 +38,13 @@ import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfo;
 import org.identityconnectors.framework.common.objects.OperationOptionsBuilder;
+import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.Uid;
 import org.identityconnectors.test.common.TestHelpers;
 import org.junit.jupiter.api.Test;
 import org.ldaptive.AddOperation;
 import org.ldaptive.AddRequest;
-import org.ldaptive.AddResponse;
 import org.ldaptive.AttributeModification;
 import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
@@ -56,8 +56,11 @@ import org.ldaptive.LdapAttribute;
 import org.ldaptive.LdapException;
 import org.ldaptive.ModifyOperation;
 import org.ldaptive.ModifyRequest;
-import org.ldaptive.ModifyResponse;
 import org.ldaptive.SingleConnectionFactory;
+import org.ldaptive.auth.SearchDnResolver;
+import org.ldaptive.extended.ExtendedOperation;
+import org.ldaptive.extended.PasswordModifyRequest;
+import org.ldaptive.handler.ResultPredicate;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -127,33 +130,61 @@ class LdUpConnectorTests {
     private static String createUser(final DefaultConnectionFactory cf) throws LdapException {
         String uid = "user" + UUID.randomUUID().toString().substring(0, 8);
         String userDn = "uid=" + uid + ",ou=People,o=isp";
-        AddResponse response = new AddOperation(cf).execute(new AddRequest(
-                userDn,
-                new LdapAttribute("objectClass", INET_ORG_PERSON_CLASS),
-                new LdapAttribute("uid", uid),
-                new LdapAttribute("sn", "Doe"),
-                new LdapAttribute("givenName", "John"),
-                new LdapAttribute("cn", "John Doe"),
-                new LdapAttribute("mail", uid + "@connid.tirasa.net")));
-        assertTrue(response.isSuccess());
+
+        AddOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(AddRequest.builder().
+                        dn(userDn).
+                        attributes(
+                                new LdapAttribute("objectClass", INET_ORG_PERSON_CLASS),
+                                new LdapAttribute("uid", uid),
+                                new LdapAttribute("sn", "Doe"),
+                                new LdapAttribute("givenName", "John"),
+                                new LdapAttribute("cn", "John Doe"),
+                                new LdapAttribute("mail", uid + "@connid.tirasa.net")).
+                        build());
+
+        ExtendedOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(new PasswordModifyRequest(userDn, null, "Password123"));
+
+        SearchDnResolver dnResolver = SearchDnResolver.builder().
+                factory(cf).
+                dn("ou=People,o=isp").
+                filter("(uid={user})").
+                build();
 
         return userDn;
     }
 
     private static void updateUser(final DefaultConnectionFactory cf, final String userDn) throws LdapException {
-        ModifyResponse response = new ModifyOperation(cf).execute(new ModifyRequest(
-                userDn,
-                new AttributeModification(AttributeModification.Type.ADD,
-                        new LdapAttribute("telephoneNumber", "+39085000000")),
-                new AttributeModification(AttributeModification.Type.REPLACE,
-                        new LdapAttribute("givenName", "Jane"))));
-        assertTrue(response.isSuccess());
+        ModifyOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(ModifyRequest.builder().
+                        dn(userDn).
+                        modifications(
+                                new AttributeModification(AttributeModification.Type.ADD,
+                                        new LdapAttribute("telephoneNumber", "+39085000000")),
+                                new AttributeModification(AttributeModification.Type.REPLACE,
+                                        new LdapAttribute("givenName", "Jane"))).
+                        build());
 
-        response = new ModifyOperation(cf).execute(new ModifyRequest(
-                "cn=Group1,ou=Groups,o=isp",
-                new AttributeModification(AttributeModification.Type.ADD,
-                        new LdapAttribute("uniqueMember", userDn))));
-        assertTrue(response.isSuccess());
+        ModifyOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(ModifyRequest.builder().
+                        dn("cn=Group1,ou=Groups,o=isp").
+                        modifications(
+                                new AttributeModification(AttributeModification.Type.ADD,
+                                        new LdapAttribute("uniqueMember", userDn))).
+                        build());
     }
 
     private static void deleteUser(final DefaultConnectionFactory cf, final String userDn) throws LdapException {
@@ -195,28 +226,38 @@ class LdUpConnectorTests {
         cf.initialize();
 
         String userDn = "uid=jdoe,ou=People,o=isp";
-        AddResponse response = new AddOperation(cf).execute(new AddRequest(
-                userDn,
-                new LdapAttribute("objectClass", INET_ORG_PERSON_CLASS),
-                new LdapAttribute("uid", "jdoe"),
-                new LdapAttribute("sn", "Doe"),
-                new LdapAttribute("givenName", "John"),
-                new LdapAttribute("cn", "John Doe"),
-                new LdapAttribute("mail", "john.doe@connid.tirasa.net")
-        ));
-        assertTrue(response.isSuccess());
+        AddOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(AddRequest.builder().
+                        dn(userDn).
+                        attributes(
+                                new LdapAttribute("objectClass", INET_ORG_PERSON_CLASS),
+                                new LdapAttribute("uid", "jdoe"),
+                                new LdapAttribute("sn", "Doe"),
+                                new LdapAttribute("givenName", "John"),
+                                new LdapAttribute("cn", "John Doe"),
+                                new LdapAttribute("mail", "john.doe@connid.tirasa.net")).
+                        build());
 
-        response = new AddOperation(cf).execute(new AddRequest(
-                "cn=Group1,ou=Groups,o=isp",
-                new LdapAttribute("objectClass", GROUP_OF_UNIQUE_NAMES_CLASS),
-                new LdapAttribute("cn", "Group1"),
-                new LdapAttribute("uniqueMember", userDn)));
-        assertTrue(response.isSuccess());
+        AddOperation.builder().
+                factory(cf).
+                throwIf(ResultPredicate.NOT_SUCCESS).
+                build().
+                execute(AddRequest.builder().
+                        dn("cn=Group1,ou=Groups,o=isp").
+                        attributes(
+                                new LdapAttribute("objectClass", GROUP_OF_UNIQUE_NAMES_CLASS),
+                                new LdapAttribute("cn", "Group1"),
+                                new LdapAttribute("uniqueMember", userDn)).
+                        build());
 
         ConnectorFacade connector = newFacade();
         List<ConnectorObject> processed = new ArrayList<>();
         doLiveSync(connector, processed, null,
-                Uid.NAME, Name.NAME, "uid", "sn", "givenName", "mail", LdUpConnector.SYNCREPL_COOKIE_NAME);
+                Uid.NAME, Name.NAME, OperationalAttributes.PASSWORD_NAME,
+                "uid", "sn", "givenName", "mail", LdUpConnector.SYNCREPL_COOKIE_NAME);
 
         // 2 predefined users in the Docker image + 1 as crated above
         assertEquals(3, processed.size());

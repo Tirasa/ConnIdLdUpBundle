@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
+import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.common.security.SecurityUtil;
 import org.identityconnectors.framework.common.exceptions.ConnectionFailedException;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
@@ -45,6 +46,7 @@ import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfoBuilder;
 import org.identityconnectors.framework.common.objects.OperationOptions;
+import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SchemaBuilder;
 import org.identityconnectors.framework.common.objects.SyncDeltaBuilder;
@@ -61,6 +63,7 @@ import org.identityconnectors.framework.spi.operations.SyncOp;
 import org.identityconnectors.framework.spi.operations.TestOp;
 import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
+import org.ldaptive.LdapEntry;
 import org.ldaptive.LdapException;
 import org.ldaptive.PooledConnectionFactory;
 import org.ldaptive.ReturnAttributes;
@@ -250,6 +253,28 @@ public class LdUpConnector
         return schema;
     }
 
+    protected Optional<Set<String>> returnAttributes(final OperationOptions options) {
+        return Optional.ofNullable(options.getAttributesToGet()).
+                map(attrs -> Stream.of(attrs).
+                filter(attr -> !NON_RETURN_ATTRS.contains(attr)).
+                map(attr -> OperationalAttributes.PASSWORD_NAME.equals(attr)
+                ? configuration.getPasswordAttribute() : attr).
+                collect(Collectors.toSet()));
+    }
+
+    protected void copyAttributes(final LdapEntry entry, final ConnectorObjectBuilder object) {
+        entry.getAttributes().forEach(attr -> {
+            if (configuration.getPasswordAttribute().equals(attr.getName())) {
+                object.addAttribute(AttributeBuilder.buildPassword(
+                        new GuardedString(attr.getStringValue().toCharArray())));
+            } else {
+                object.addAttribute(AttributeBuilder.build(
+                        attr.getName(),
+                        attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues()));
+            }
+        });
+    }
+
     @Override
     public SyncToken getLatestSyncToken(final ObjectClass objectClass) {
         AtomicReference<String> latest = new AtomicReference<>();
@@ -311,9 +336,7 @@ public class LdUpConnector
                 switch (ssc.getSyncState()) {
                     case ADD:
                     case MODIFY:
-                        entry.getAttributes().forEach(attr -> object.addAttribute(AttributeBuilder.build(
-                                attr.getName(),
-                                attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues())));
+                        copyAttributes(entry, object);
                         objects.add(createOrUpdate.apply(object));
                         break;
 
@@ -371,11 +394,7 @@ public class LdUpConnector
                     dn(configuration.getBaseDn()).
                     scope(SearchScope.SUBTREE).
                     filter("objectClass=" + objectClass.getObjectClassValue());
-            Optional.ofNullable(options.getAttributesToGet()).
-                    map(attrs -> Stream.of(attrs).
-                    filter(attr -> !NON_RETURN_ATTRS.contains(attr)).
-                    collect(Collectors.toSet())).
-                    ifPresent(searchRequestBuilder::returnAttributes);
+            returnAttributes(options).ifPresent(searchRequestBuilder::returnAttributes);
 
             DefaultCookieManager cookieManager = new DefaultCookieManager();
             Optional.ofNullable(cookie).ifPresent(cookieManager::writeCookie);
@@ -406,7 +425,7 @@ public class LdUpConnector
                 object -> new SyncDeltaBuilder().
                         setDeltaType(SyncDeltaType.DELETE).
                         setObject(object.build()),
-                (object, cookie) -> object.setToken(new SyncToken(cookie)),
+                (syncDelta, cookie) -> syncDelta.setToken(new SyncToken(cookie)),
                 Optional.ofNullable(token).map(t -> t.getValue().toString().getBytes()).orElse(null),
                 options);
 
