@@ -43,7 +43,13 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     private String baseDn;
 
+    private String accountObjectClass = "inetOrgPerson";
+
+    private String groupObjectClass = "groupOfUniqueNames";
+
     private String passwordAttribute = "userPassword";
+
+    private String groupMemberAttribute = "uniqueMember";
 
     @ConfigurationProperty(displayMessageKey = "url.display",
             helpMessageKey = "url.help", required = true, order = 1)
@@ -145,14 +151,44 @@ public class LdUpConfiguration extends AbstractConfiguration {
         this.baseDn = baseDn;
     }
 
+    @ConfigurationProperty(displayMessageKey = "accountObjectClass.display",
+            helpMessageKey = "accountObjectClass.help", required = true, order = 11)
+    public String getAccountObjectClass() {
+        return accountObjectClass;
+    }
+
+    public void setAccountObjectClass(final String accountObjectClass) {
+        this.accountObjectClass = accountObjectClass;
+    }
+
+    @ConfigurationProperty(displayMessageKey = "groupObjectClass.display",
+            helpMessageKey = "groupObjectClass.help", required = true, order = 12)
+    public String getGroupObjectClass() {
+        return groupObjectClass;
+    }
+
+    public void setGroupObjectClass(final String groupObjectClass) {
+        this.groupObjectClass = groupObjectClass;
+    }
+
     @ConfigurationProperty(displayMessageKey = "passwordAttribute.display",
-            helpMessageKey = "passwordAttribute.help", required = true, order = 11)
+            helpMessageKey = "passwordAttribute.help", required = true, order = 13)
     public String getPasswordAttribute() {
         return passwordAttribute;
     }
 
     public void setPasswordAttribute(final String passwordAttribute) {
         this.passwordAttribute = passwordAttribute;
+    }
+
+    @ConfigurationProperty(displayMessageKey = "groupMemberAttribute.display",
+            helpMessageKey = "groupMemberAttribute.help", required = true, order = 14)
+    public String getGroupMemberAttribute() {
+        return groupMemberAttribute;
+    }
+
+    public void setGroupMemberAttribute(final String groupMemberAttribute) {
+        this.groupMemberAttribute = groupMemberAttribute;
     }
 
     @Override

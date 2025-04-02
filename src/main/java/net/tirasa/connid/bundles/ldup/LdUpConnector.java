@@ -40,6 +40,7 @@ import org.identityconnectors.framework.common.objects.AttributeInfo.Flags;
 import org.identityconnectors.framework.common.objects.AttributeInfoBuilder;
 import org.identityconnectors.framework.common.objects.AttributeUtil;
 import org.identityconnectors.framework.common.objects.ConnectorObjectBuilder;
+import org.identityconnectors.framework.common.objects.ConnectorObjectReference;
 import org.identityconnectors.framework.common.objects.LiveSyncDeltaBuilder;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
 import org.identityconnectors.framework.common.objects.Name;
@@ -47,6 +48,7 @@ import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.ObjectClassInfoBuilder;
 import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
+import org.identityconnectors.framework.common.objects.PredefinedAttributes;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SchemaBuilder;
 import org.identityconnectors.framework.common.objects.SyncDeltaBuilder;
@@ -78,6 +80,7 @@ import org.ldaptive.control.SyncStateControl;
 import org.ldaptive.control.util.DefaultCookieManager;
 import org.ldaptive.control.util.SyncReplClient;
 import org.ldaptive.extended.SyncInfoMessage;
+import org.ldaptive.handler.ResultPredicate;
 import org.ldaptive.pool.BindConnectionPassivator;
 import org.ldaptive.schema.AttributeUsage;
 import org.ldaptive.schema.ObjectClassType;
@@ -89,9 +92,12 @@ public class LdUpConnector
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
 
+    protected static final String MEMBERS_ATTR_NAME = AttributeUtil.createSpecialName("MEMBERS");
+
     protected static final String SYNCREPL_COOKIE_NAME = AttributeUtil.createSpecialName("SYNCREPL_COOKIE");
 
-    protected static final Set<String> NON_RETURN_ATTRS = Set.of(Uid.NAME, Name.NAME, SYNCREPL_COOKIE_NAME);
+    protected static final Set<String> NON_RETURN_ATTRS = Set.of(
+            Uid.NAME, Name.NAME, PredefinedAttributes.GROUPS_NAME, SYNCREPL_COOKIE_NAME);
 
     protected LdUpConfiguration configuration;
 
@@ -241,7 +247,35 @@ public class LdUpConnector
                                             attr, ldapClass.getName())));
                     objClassBld.addAllAttributeInfo(attrInfos);
 
+                    if (configuration.getAccountObjectClass().equals(ldapClass.getName())) {
+                        objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                PredefinedAttributes.GROUPS_NAME,
+                                ConnectorObjectReference.class).
+                                setReferencedObjectClassName(configuration.getGroupObjectClass()).
+                                setRoleInReference(AttributeInfo.RoleInReference.SUBJECT.toString()).
+                                setMultiValued(true).
+                                setReturnedByDefault(false).
+                                build());
+                    } else if (configuration.getGroupObjectClass().equals(ldapClass.getName())) {
+                        objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                MEMBERS_ATTR_NAME,
+                                ConnectorObjectReference.class).
+                                setReferencedObjectClassName(configuration.getAccountObjectClass()).
+                                setRoleInReference(AttributeInfo.RoleInReference.OBJECT.toString()).
+                                setMultiValued(true).
+                                setReturnedByDefault(false).
+                                build());
+                    }
+
                     schemaBld.defineObjectClass(objClassBld.build());
+
+                    if (configuration.getAccountObjectClass().equals(ldapClass.getName())) {
+                        objClassBld.setType(ObjectClass.ACCOUNT_NAME);
+                        schemaBld.defineObjectClass(objClassBld.build());
+                    } else if (configuration.getGroupObjectClass().equals(ldapClass.getName())) {
+                        objClassBld.setType(ObjectClass.GROUP_NAME);
+                        schemaBld.defineObjectClass(objClassBld.build());
+                    }
                 });
             } catch (Exception e) {
                 LOG.error(e, "While building schema");
@@ -253,26 +287,12 @@ public class LdUpConnector
         return schema;
     }
 
-    protected Optional<Set<String>> returnAttributes(final OperationOptions options) {
-        return Optional.ofNullable(options.getAttributesToGet()).
-                map(attrs -> Stream.of(attrs).
-                filter(attr -> !NON_RETURN_ATTRS.contains(attr)).
-                map(attr -> OperationalAttributes.PASSWORD_NAME.equals(attr)
-                ? configuration.getPasswordAttribute() : attr).
-                collect(Collectors.toSet()));
-    }
-
-    protected void copyAttributes(final LdapEntry entry, final ConnectorObjectBuilder object) {
-        entry.getAttributes().forEach(attr -> {
-            if (configuration.getPasswordAttribute().equals(attr.getName())) {
-                object.addAttribute(AttributeBuilder.buildPassword(
-                        new GuardedString(attr.getStringValue().toCharArray())));
-            } else {
-                object.addAttribute(AttributeBuilder.build(
-                        attr.getName(),
-                        attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues()));
-            }
-        });
+    protected String ldapObjectClass(final ObjectClass objectClass) {
+        return ObjectClass.ACCOUNT.equals(objectClass)
+                ? configuration.getAccountObjectClass()
+                : ObjectClass.GROUP.equals(objectClass)
+                ? configuration.getGroupObjectClass()
+                : objectClass.getObjectClassValue();
     }
 
     @Override
@@ -296,7 +316,7 @@ public class LdUpConnector
             client.send(SearchRequest.builder().
                     dn(configuration.getBaseDn()).
                     scope(SearchScope.SUBTREE).
-                    filter("objectClass=" + objectClass.getObjectClassValue()).build(),
+                    filter("objectClass=" + ldapObjectClass(objectClass)).build(),
                     new DefaultCookieManager()).await();
         } catch (LdapException e) {
             throw new ConnectorException("While managing SyncRepl events for " + objectClass, e);
@@ -306,6 +326,84 @@ public class LdUpConnector
         }
 
         return Optional.ofNullable(latest.get()).map(SyncToken::new).orElse(null);
+    }
+
+    protected void copyAttributes(final LdapEntry entry, final ConnectorObjectBuilder object) {
+        entry.getAttributes().forEach(attr -> {
+            if (configuration.getPasswordAttribute().equals(attr.getName())) {
+                object.addAttribute(AttributeBuilder.buildPassword(
+                        new GuardedString(attr.getStringValue().toCharArray())));
+            } else if (configuration.getGroupMemberAttribute().equals(attr.getName())) {
+                Set<ConnectorObjectReference> members = attr.getStringValues().stream().
+                        map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
+                        setName(dn).
+                        setObjectClass(new ObjectClass(configuration.getAccountObjectClass())).
+                        buildIdentification())).
+                        collect(Collectors.toSet());
+                object.addAttribute(AttributeBuilder.build(MEMBERS_ATTR_NAME, members));
+            } else {
+                object.addAttribute(AttributeBuilder.build(
+                        attr.getName(),
+                        attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues()));
+            }
+        });
+    }
+
+    protected void addUserGroups(
+            final ObjectClass objectClass,
+            final String userDn,
+            final ConnectorObjectBuilder user,
+            final OperationOptions options) {
+
+        // not an user, skip
+        if (!configuration.getAccountObjectClass().equals(objectClass.getObjectClassValue())) {
+            return;
+        }
+
+        // no groups requested, skip
+        if (Optional.ofNullable(options.getAttributesToGet()).
+                map(attrs -> Stream.of(attrs).noneMatch(PredefinedAttributes.GROUPS_NAME::equals)).
+                orElse(false)) {
+
+            return;
+        }
+
+        try {
+            SearchResponse response = SearchOperation.builder().
+                    factory(connectionFactory).
+                    throwIf(ResultPredicate.NOT_SUCCESS).
+                    build().execute(
+                            SearchRequest.builder().
+                                    dn(configuration.getBaseDn()).
+                                    scope(SearchScope.SUBTREE).
+                                    filter("(&(objectClass=" + configuration.getGroupObjectClass() + ")"
+                                            + "(" + configuration.getGroupMemberAttribute() + "=" + userDn + "))").
+                                    returnAttributes(ReturnAttributes.NONE.value()).
+                                    build());
+
+            Set<ConnectorObjectReference> groups = response.getEntries().stream().
+                    map(LdapEntry::getDn).
+                    map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
+                    setName(dn).
+                    setObjectClass(new ObjectClass(configuration.getGroupObjectClass())).
+                    buildIdentification())).
+                    collect(Collectors.toSet());
+            user.addAttribute(AttributeBuilder.build(PredefinedAttributes.GROUPS_NAME, groups));
+        } catch (LdapException e) {
+            LOG.error(e, "While searching groups for {0}", userDn);
+        }
+    }
+
+    protected Optional<Set<String>> returnAttributes(final OperationOptions options) {
+        return Optional.ofNullable(options.getAttributesToGet()).
+                map(attrs -> Stream.of(attrs).
+                filter(attr -> !NON_RETURN_ATTRS.contains(attr)).
+                map(attr -> OperationalAttributes.PASSWORD_NAME.equals(attr)
+                ? configuration.getPasswordAttribute()
+                : MEMBERS_ATTR_NAME.equals(attr)
+                ? configuration.getGroupMemberAttribute()
+                : attr).
+                collect(Collectors.toSet()));
     }
 
     protected <T> List<T> dosync(
@@ -337,6 +435,7 @@ public class LdUpConnector
                     case ADD:
                     case MODIFY:
                         copyAttributes(entry, object);
+                        addUserGroups(objectClass, entry.getDn(), object, options);
                         objects.add(createOrUpdate.apply(object));
                         break;
 
@@ -352,13 +451,16 @@ public class LdUpConnector
                 if (message.getMessageType() == SyncInfoMessage.Type.SYNC_ID_SET) {
                     message.getEntryUuids().forEach(entryUUID -> {
                         try {
-                            SearchResponse response = new SearchOperation(connectionFactory).execute(
-                                    SearchRequest.builder().
-                                            dn(configuration.getBaseDn()).
-                                            scope(SearchScope.SUBTREE).
-                                            filter("entryUUID=" + entryUUID.toString()).
-                                            returnAttributes(ReturnAttributes.NONE.value()).
-                                            build());
+                            SearchResponse response = SearchOperation.builder().
+                                    factory(connectionFactory).
+                                    throwIf(ResultPredicate.NOT_SUCCESS).
+                                    build().execute(
+                                            SearchRequest.builder().
+                                                    dn(configuration.getBaseDn()).
+                                                    scope(SearchScope.SUBTREE).
+                                                    filter("entryUUID=" + entryUUID.toString()).
+                                                    returnAttributes(ReturnAttributes.NONE.value()).
+                                                    build());
                             if (response.isSuccess()) {
                                 if (response.getEntries().isEmpty()) {
                                     LOG.ok("No match while searching for entryUUID={0}: it was a DELETE", entryUUID);
@@ -393,7 +495,7 @@ public class LdUpConnector
             SearchRequest.Builder searchRequestBuilder = SearchRequest.builder().
                     dn(configuration.getBaseDn()).
                     scope(SearchScope.SUBTREE).
-                    filter("objectClass=" + objectClass.getObjectClassValue());
+                    filter("objectClass=" + ldapObjectClass(objectClass));
             returnAttributes(options).ifPresent(searchRequestBuilder::returnAttributes);
 
             DefaultCookieManager cookieManager = new DefaultCookieManager();
