@@ -371,6 +371,7 @@ class LdUpConnectorTests {
         // 3. delete user
         deleteUser(cf, userDn);
 
+        // 3a. live sync users
         users.clear();
         doLiveSync(connector, INET_ORG_PERSON_CLASS, users, cookie);
 
@@ -379,8 +380,20 @@ class LdUpConnectorTests {
         assertEquals(entryUUID, users.get(0).getUid().getUidValue());
         assertEquals(entryUUID, users.get(0).getName().getNameValue());
 
-        cookie = AttributeUtil.getStringValue(users.get(0).getAttributeByName(LdUpConnector.SYNCREPL_COOKIE_NAME));
-        assertNotNull(cookie);
+        // 3b. live sync groups
+        groups.clear();
+        doLiveSync(connector, GROUP_OF_UNIQUE_NAMES_CLASS, groups, cookie, GROUP_ATTRS_TO_GET);
+
+        ConnectorObject group = groups.stream().
+                filter(g -> TEST_GROUP_DN.equals(g.getName().getNameValue())).findFirst().orElseThrow();
+
+        groupMembers = group.getAttributeByName(LdUpConnector.MEMBERS_ATTR_NAME);
+        assertNotNull(groupMembers);
+        assertEquals(1, groupMembers.getValue().size());
+        assertTrue(groupMembers.getValue().get(0) instanceof ConnectorObjectReference);
+        ConnectorObjectReference groupMember = (ConnectorObjectReference) groupMembers.getValue().get(0);
+        assertEquals(INET_ORG_PERSON_CLASS, groupMember.getValue().getObjectClass().getObjectClassValue());
+        assertEquals(jdoe, groupMember.getValue().getAttributeByName(Name.NAME).getValue().get(0));
     }
 
     @Test
