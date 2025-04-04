@@ -51,6 +51,8 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     private String groupMemberAttribute = "uniqueMember";
 
+    private boolean legacyCompatibilityMode = false;
+
     @ConfigurationProperty(displayMessageKey = "url.display",
             helpMessageKey = "url.help", required = true, order = 1)
     public String getUrl() {
@@ -189,6 +191,16 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     public void setGroupMemberAttribute(final String groupMemberAttribute) {
         this.groupMemberAttribute = groupMemberAttribute;
+    }
+
+    @ConfigurationProperty(displayMessageKey = "legacyCompatibilityMode.display",
+            helpMessageKey = "legacyCompatibilityMode.help", order = 15)
+    public boolean isLegacyCompatibilityMode() {
+        return legacyCompatibilityMode;
+    }
+
+    public void setLegacyCompatibilityMode(final boolean legacyCompatibilityMode) {
+        this.legacyCompatibilityMode = legacyCompatibilityMode;
     }
 
     @Override

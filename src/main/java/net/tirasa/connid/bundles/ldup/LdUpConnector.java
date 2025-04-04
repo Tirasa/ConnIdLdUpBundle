@@ -94,10 +94,12 @@ public class LdUpConnector
 
     protected static final String MEMBERS_ATTR_NAME = AttributeUtil.createSpecialName("MEMBERS");
 
+    protected static final String LEGACY_GROUPS_ATTR_NAME = "ldapGroups";
+
     protected static final String SYNCREPL_COOKIE_NAME = AttributeUtil.createSpecialName("SYNCREPL_COOKIE");
 
     protected static final Set<String> NON_RETURN_ATTRS = Set.of(
-            Uid.NAME, Name.NAME, PredefinedAttributes.GROUPS_NAME, SYNCREPL_COOKIE_NAME);
+            Uid.NAME, Name.NAME, PredefinedAttributes.GROUPS_NAME, LEGACY_GROUPS_ATTR_NAME, SYNCREPL_COOKIE_NAME);
 
     protected LdUpConfiguration configuration;
 
@@ -248,23 +250,41 @@ public class LdUpConnector
                     objClassBld.addAllAttributeInfo(attrInfos);
 
                     if (configuration.getAccountObjectClass().equals(ldapClass.getName())) {
-                        objClassBld.addAttributeInfo(new AttributeInfoBuilder(
-                                PredefinedAttributes.GROUPS_NAME,
-                                ConnectorObjectReference.class).
-                                setReferencedObjectClassName(configuration.getGroupObjectClass()).
-                                setRoleInReference(AttributeInfo.RoleInReference.SUBJECT.toString()).
-                                setMultiValued(true).
-                                setReturnedByDefault(false).
-                                build());
+                        if (configuration.isLegacyCompatibilityMode()) {
+                            objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                    LEGACY_GROUPS_ATTR_NAME,
+                                    String.class).
+                                    setMultiValued(true).
+                                    setReturnedByDefault(false).
+                                    build());
+                        } else {
+                            objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                    PredefinedAttributes.GROUPS_NAME,
+                                    ConnectorObjectReference.class).
+                                    setReferencedObjectClassName(configuration.getGroupObjectClass()).
+                                    setRoleInReference(AttributeInfo.RoleInReference.SUBJECT.toString()).
+                                    setMultiValued(true).
+                                    setReturnedByDefault(false).
+                                    build());
+                        }
                     } else if (configuration.getGroupObjectClass().equals(ldapClass.getName())) {
-                        objClassBld.addAttributeInfo(new AttributeInfoBuilder(
-                                MEMBERS_ATTR_NAME,
-                                ConnectorObjectReference.class).
-                                setReferencedObjectClassName(configuration.getAccountObjectClass()).
-                                setRoleInReference(AttributeInfo.RoleInReference.OBJECT.toString()).
-                                setMultiValued(true).
-                                setReturnedByDefault(false).
-                                build());
+                        if (configuration.isLegacyCompatibilityMode()) {
+                            objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                    configuration.getGroupMemberAttribute(),
+                                    String.class).
+                                    setMultiValued(true).
+                                    setReturnedByDefault(false).
+                                    build());
+                        } else {
+                            objClassBld.addAttributeInfo(new AttributeInfoBuilder(
+                                    MEMBERS_ATTR_NAME,
+                                    ConnectorObjectReference.class).
+                                    setReferencedObjectClassName(configuration.getAccountObjectClass()).
+                                    setRoleInReference(AttributeInfo.RoleInReference.OBJECT.toString()).
+                                    setMultiValued(true).
+                                    setReturnedByDefault(false).
+                                    build());
+                        }
                     }
 
                     schemaBld.defineObjectClass(objClassBld.build());
@@ -334,13 +354,17 @@ public class LdUpConnector
                 object.addAttribute(AttributeBuilder.buildPassword(
                         new GuardedString(attr.getStringValue().toCharArray())));
             } else if (configuration.getGroupMemberAttribute().equals(attr.getName())) {
-                Set<ConnectorObjectReference> members = attr.getStringValues().stream().
-                        map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
-                        setName(dn).
-                        setObjectClass(new ObjectClass(configuration.getAccountObjectClass())).
-                        buildIdentification())).
-                        collect(Collectors.toSet());
-                object.addAttribute(AttributeBuilder.build(MEMBERS_ATTR_NAME, members));
+                if (configuration.isLegacyCompatibilityMode()) {
+                    object.addAttribute(AttributeBuilder.build(attr.getName(), attr.getStringValues()));
+                } else {
+                    Set<ConnectorObjectReference> members = attr.getStringValues().stream().
+                            map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
+                            setName(dn).
+                            setObjectClass(new ObjectClass(configuration.getAccountObjectClass())).
+                            buildIdentification())).
+                            collect(Collectors.toSet());
+                    object.addAttribute(AttributeBuilder.build(MEMBERS_ATTR_NAME, members));
+                }
             } else {
                 object.addAttribute(AttributeBuilder.build(
                         attr.getName(),
@@ -381,14 +405,20 @@ public class LdUpConnector
                                     returnAttributes(ReturnAttributes.NONE.value()).
                                     build());
 
-            Set<ConnectorObjectReference> groups = response.getEntries().stream().
-                    map(LdapEntry::getDn).
-                    map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
-                    setName(dn).
-                    setObjectClass(new ObjectClass(configuration.getGroupObjectClass())).
-                    buildIdentification())).
-                    collect(Collectors.toSet());
-            user.addAttribute(AttributeBuilder.build(PredefinedAttributes.GROUPS_NAME, groups));
+            if (configuration.isLegacyCompatibilityMode()) {
+                user.addAttribute(AttributeBuilder.build(
+                        LEGACY_GROUPS_ATTR_NAME,
+                        response.getEntries().stream().map(LdapEntry::getDn).collect(Collectors.toSet())));
+            } else {
+                Set<ConnectorObjectReference> groups = response.getEntries().stream().
+                        map(LdapEntry::getDn).
+                        map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
+                        setName(dn).
+                        setObjectClass(new ObjectClass(configuration.getGroupObjectClass())).
+                        buildIdentification())).
+                        collect(Collectors.toSet());
+                user.addAttribute(AttributeBuilder.build(PredefinedAttributes.GROUPS_NAME, groups));
+            }
         } catch (LdapException e) {
             LOG.error(e, "While searching groups for {0}", userDn);
         }
