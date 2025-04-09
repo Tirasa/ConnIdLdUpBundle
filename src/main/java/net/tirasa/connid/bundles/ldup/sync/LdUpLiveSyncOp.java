@@ -15,6 +15,7 @@
  */
 package net.tirasa.connid.bundles.ldup.sync;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -46,7 +47,8 @@ public class LdUpLiveSyncOp extends LdUpAbstractSyncOp implements LiveSyncOp {
                 Function.identity(),
                 (object, cookie) -> object.addAttribute(AttributeBuilder.build(
                         LdUpConstants.SYNCREPL_COOKIE_NAME, cookie)),
-                Optional.ofNullable(options.getPagedResultsCookie()).map(String::getBytes).orElse(null),
+                Optional.ofNullable(options.getPagedResultsCookie()).
+                        map(cookie -> Base64.getDecoder().decode(cookie)).orElse(null),
                 options);
 
         objects.forEach(object -> handler.handle(new LiveSyncDeltaBuilder().setObject(object.build()).build()));

@@ -16,6 +16,7 @@
 package net.tirasa.connid.bundles.ldup;
 
 import org.identityconnectors.common.security.GuardedString;
+import org.identityconnectors.common.security.SecurityUtil;
 import org.identityconnectors.framework.api.APIConfiguration;
 import org.identityconnectors.framework.api.ConnectorFacade;
 import org.identityconnectors.framework.api.ConnectorFacadeFactory;
@@ -24,6 +25,10 @@ import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.PredefinedAttributes;
 import org.identityconnectors.framework.common.objects.Uid;
 import org.identityconnectors.test.common.TestHelpers;
+import org.ldaptive.BindConnectionInitializer;
+import org.ldaptive.ConnectionConfig;
+import org.ldaptive.LdapException;
+import org.ldaptive.SingleConnectionFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
@@ -31,7 +36,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
-class AbstractLdUpConnectorTests {
+public abstract class AbstractLdUpConnectorTests {
 
     protected static final String INET_ORG_PERSON_CLASS = "inetOrgPerson";
 
@@ -47,7 +52,7 @@ class AbstractLdUpConnectorTests {
         Uid.NAME, Name.NAME, "cn", LdUpConstants.MEMBERS_ATTR_NAME, LdUpConstants.SYNCREPL_COOKIE_NAME };
 
     @Container
-    static GenericContainer<?> LDAP_CONTAINER = new GenericContainer<>(
+    protected static GenericContainer<?> LDAP_CONTAINER = new GenericContainer<>(
             DockerImageName.parse("bitnami/openldap:2.6")).
             waitingFor(Wait.forLogMessage(".*slapd starting.*", 1)).
             withEnv("LDAP_ROOT", "o=isp").
@@ -66,9 +71,28 @@ class AbstractLdUpConnectorTests {
     }
 
     protected static ConnectorFacade newFacade() {
+        return newFacade(newConfiguration());
+    }
+
+    protected static ConnectorFacade newFacade(final LdUpConfiguration configuration) {
         ConnectorFacadeFactory factory = ConnectorFacadeFactory.getInstance();
-        APIConfiguration impl = TestHelpers.createTestConfiguration(LdUpConnector.class, newConfiguration());
+        APIConfiguration impl = TestHelpers.createTestConfiguration(LdUpConnector.class, configuration);
         impl.getResultsHandlerConfiguration().setFilteredResultsHandlerInValidationMode(true);
         return factory.newInstance(impl);
+    }
+
+    protected static SingleConnectionFactory singleConnectionFactory() throws LdapException {
+        LdUpConfiguration conf = newConfiguration();
+
+        ConnectionConfig connectionConfig = ConnectionConfig.builder().
+                url(conf.getUrl()).
+                connectionInitializers(BindConnectionInitializer.builder().
+                        dn(conf.getBindDn()).
+                        credential(SecurityUtil.decrypt(conf.getBindPassword())).
+                        build()).
+                build();
+        SingleConnectionFactory cf = SingleConnectionFactory.builder().config(connectionConfig).build();
+        cf.initialize();
+        return cf;
     }
 }

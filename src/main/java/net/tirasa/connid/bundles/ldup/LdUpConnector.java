@@ -15,6 +15,8 @@
  */
 package net.tirasa.connid.bundles.ldup;
 
+import net.tirasa.connid.bundles.ldup.search.LdUpFilter;
+import net.tirasa.connid.bundles.ldup.search.LdUpSearchOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpLiveSyncOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpSyncOp;
 import org.identityconnectors.common.logging.Log;
@@ -23,26 +25,31 @@ import org.identityconnectors.framework.common.exceptions.ConnectorException;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.OperationOptions;
+import org.identityconnectors.framework.common.objects.ResultsHandler;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SyncResultsHandler;
 import org.identityconnectors.framework.common.objects.SyncToken;
+import org.identityconnectors.framework.common.objects.filter.FilterTranslator;
 import org.identityconnectors.framework.spi.Configuration;
 import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.PoolableConnector;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
+import org.identityconnectors.framework.spi.operations.SearchOp;
 import org.identityconnectors.framework.spi.operations.SyncOp;
 import org.identityconnectors.framework.spi.operations.TestOp;
 
 @ConnectorClass(configurationClass = LdUpConfiguration.class, displayNameKey = "ldup.connector.display")
 public class LdUpConnector
-        implements PoolableConnector, SchemaOp, SyncOp, LiveSyncOp, TestOp {
+        implements PoolableConnector, TestOp, SchemaOp, SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
 
     protected LdUpUtils ldUpUtils;
 
     protected LdUpSchemaOp ldUpSchema;
+
+    protected LdUpSearchOp ldUpSearchOp;
 
     protected LdUpSyncOp ldUpSync;
 
@@ -62,6 +69,7 @@ public class LdUpConnector
         ldUpUtils.getConfiguration().validate();
 
         ldUpSchema = new LdUpSchemaOp(ldUpUtils);
+        ldUpSearchOp = new LdUpSearchOp(ldUpUtils);
         ldUpSync = new LdUpSyncOp(ldUpUtils);
         ldUpLiveSync = new LdUpLiveSyncOp(ldUpUtils);
     }
@@ -98,6 +106,24 @@ public class LdUpConnector
     @Override
     public Schema schema() {
         return ldUpSchema.schema();
+    }
+
+    @Override
+    public FilterTranslator<LdUpFilter> createFilterTranslator(
+            final ObjectClass objectClass,
+            final OperationOptions options) {
+
+        return ldUpSearchOp.createFilterTranslator(objectClass, options);
+    }
+
+    @Override
+    public void executeQuery(
+            final ObjectClass objectClass,
+            final LdUpFilter filter,
+            final ResultsHandler handler,
+            final OperationOptions options) {
+
+        ldUpSearchOp.executeQuery(objectClass, filter, handler, options);
     }
 
     @Override

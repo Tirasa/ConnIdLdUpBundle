@@ -16,21 +16,27 @@
 package net.tirasa.connid.bundles.ldup;
 
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.identityconnectors.common.CollectionUtil;
 import org.identityconnectors.common.StringUtil;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.common.security.SecurityUtil;
 import org.identityconnectors.framework.common.objects.AttributeBuilder;
+import org.identityconnectors.framework.common.objects.AttributeUtil;
 import org.identityconnectors.framework.common.objects.ConnectorObjectBuilder;
 import org.identityconnectors.framework.common.objects.ConnectorObjectReference;
+import org.identityconnectors.framework.common.objects.Name;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.PredefinedAttributes;
+import org.identityconnectors.framework.common.objects.Uid;
 import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
 import org.ldaptive.LdapEntry;
@@ -48,6 +54,21 @@ import org.ldaptive.pool.BindConnectionPassivator;
 public class LdUpUtils {
 
     protected static final Log LOG = Log.getLog(LdUpUtils.class);
+
+    protected static final Set<String> ENTRY_DN_ATTRS;
+
+    static {
+        Set<String> set = CollectionUtil.newCaseInsensitiveSet();
+        set.add("entryDN");
+        // These two are used throughout the adapter.
+        set.add("dn");
+        set.add("distinguishedName");
+        ENTRY_DN_ATTRS = Collections.unmodifiableSet(set);
+    }
+
+    public static boolean isDNAttribute(final String attrID) {
+        return ENTRY_DN_ATTRS.contains(attrID);
+    }
 
     protected final LdUpConfiguration configuration;
 
@@ -112,6 +133,34 @@ public class LdUpUtils {
         return connectionFactory;
     }
 
+    public Optional<String> getLdapAttribute(final ObjectClass objectClass, final String attribute) {
+        if (AttributeUtil.namesEqual(Uid.NAME, attribute)) {
+            if (configuration.getAccountObjectClass().equals(objectClass.getObjectClassValue())
+                    || ObjectClass.ACCOUNT.equals(objectClass)) {
+
+                return Optional.of(configuration.getUidAttribute());
+            }
+            if (configuration.getGroupObjectClass().equals(objectClass.getObjectClassValue())
+                    || ObjectClass.GROUP.equals(objectClass)) {
+
+                return Optional.of(configuration.getGidAttribute());
+            }
+            return Optional.of(LdUpConstants.DEFAULT_ID_ATTRIBUTE);
+        } else if (AttributeUtil.namesEqual(Name.NAME, attribute)) {
+            return Optional.of("entryDN");
+        } else if (OperationalAttributes.PASSWORD_NAME.equals(attribute)) {
+            return Optional.of(configuration.getPasswordAttribute());
+        }
+
+        if (!AttributeUtil.isSpecialName(attribute)) {
+            return Optional.of(attribute);
+        }
+
+        LOG.warn("Attribute {0} of object class {1} is not mapped to an LDAP attribute",
+                attribute, objectClass.getObjectClassValue());
+        return Optional.empty();
+    }
+
     public String ldapObjectClass(final ObjectClass objectClass) {
         return ObjectClass.ACCOUNT.equals(objectClass)
                 ? configuration.getAccountObjectClass()
@@ -120,14 +169,34 @@ public class LdUpUtils {
                 : objectClass.getObjectClassValue();
     }
 
-    public void copyAttributes(final LdapEntry entry, final ConnectorObjectBuilder object) {
+    public Optional<Set<String>> returnAttributes(final OperationOptions options) {
+        return Optional.ofNullable(options.getAttributesToGet()).
+                map(attrs -> Stream.of(attrs).
+                filter(attr -> !LdUpConstants.NON_RETURN_ATTRS.contains(attr)).
+                map(attr -> OperationalAttributes.PASSWORD_NAME.equals(attr)
+                ? configuration.getPasswordAttribute()
+                : LdUpConstants.MEMBERS_ATTR_NAME.equals(attr)
+                ? configuration.getGroupMemberAttribute()
+                : attr).
+                collect(Collectors.toSet()));
+    }
+
+    protected void copyAttributes(
+            final LdapEntry entry,
+            final ConnectorObjectBuilder object,
+            final Optional<Set<String>> requestedAttributes) {
+
+        Set<String> returned = new HashSet<>();
+
         entry.getAttributes().forEach(attr -> {
             if (configuration.getPasswordAttribute().equals(attr.getName())) {
                 object.addAttribute(AttributeBuilder.buildPassword(
                         new GuardedString(attr.getStringValue().toCharArray())));
+                returned.add(OperationalAttributes.PASSWORD_NAME);
             } else if (configuration.getGroupMemberAttribute().equals(attr.getName())) {
                 if (configuration.isLegacyCompatibilityMode()) {
                     object.addAttribute(AttributeBuilder.build(attr.getName(), attr.getStringValues()));
+                    returned.add(attr.getName());
                 } else {
                     Set<ConnectorObjectReference> members = attr.getStringValues().stream().
                             map(dn -> new ConnectorObjectReference(new ConnectorObjectBuilder().
@@ -136,16 +205,24 @@ public class LdUpUtils {
                             buildIdentification())).
                             collect(Collectors.toSet());
                     object.addAttribute(AttributeBuilder.build(LdUpConstants.MEMBERS_ATTR_NAME, members));
+                    returned.add(LdUpConstants.MEMBERS_ATTR_NAME);
                 }
             } else {
                 object.addAttribute(AttributeBuilder.build(
                         attr.getName(),
                         attr.isBinary() ? attr.getBinaryValues() : attr.getStringValues()));
+                returned.add(attr.getName());
             }
+        });
+
+        requestedAttributes.ifPresent(requested -> {
+            Set<String> residual = new HashSet<>(requested);
+            residual.removeAll(returned);
+            residual.forEach(r -> object.addAttribute(AttributeBuilder.build(r, Set.of())));
         });
     }
 
-    public void addUserGroups(
+    protected void addUserGroups(
             final ObjectClass objectClass,
             final String userDn,
             final ConnectorObjectBuilder user,
@@ -196,15 +273,20 @@ public class LdUpUtils {
         }
     }
 
-    public Optional<Set<String>> returnAttributes(final OperationOptions options) {
-        return Optional.ofNullable(options.getAttributesToGet()).
-                map(attrs -> Stream.of(attrs).
-                filter(attr -> !LdUpConstants.NON_RETURN_ATTRS.contains(attr)).
-                map(attr -> OperationalAttributes.PASSWORD_NAME.equals(attr)
-                ? configuration.getPasswordAttribute()
-                : LdUpConstants.MEMBERS_ATTR_NAME.equals(attr)
-                ? configuration.getGroupMemberAttribute()
-                : attr).
-                collect(Collectors.toSet()));
+    public ConnectorObjectBuilder connectorObjectBuilder(
+            final ObjectClass objectClass,
+            final Uid uid,
+            final LdapEntry entry,
+            final OperationOptions options) {
+
+        ConnectorObjectBuilder object = new ConnectorObjectBuilder().
+                setObjectClass(objectClass).
+                setUid(uid).
+                setName(entry.getDn());
+
+        copyAttributes(entry, object, returnAttributes(options));
+        addUserGroups(objectClass, entry.getDn(), object, options);
+
+        return object;
     }
 }

@@ -15,6 +15,7 @@
  */
 package net.tirasa.connid.bundles.ldup.sync;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,7 +59,7 @@ public class LdUpSyncOp extends LdUpAbstractSyncOp implements SyncOp {
 
                 SyncDoneControl syncDoneControl = (SyncDoneControl) result.getControl(SyncDoneControl.OID);
 
-                latest.set(new String(syncDoneControl.getCookie()));
+                latest.set(Base64.getEncoder().encodeToString(syncDoneControl.getCookie()));
             });
             client.setOnException(e -> LOG.error(e, "SyncRepl exception thrown"));
 
@@ -93,7 +94,7 @@ public class LdUpSyncOp extends LdUpAbstractSyncOp implements SyncOp {
                         setDeltaType(SyncDeltaType.DELETE).
                         setObject(object.build()),
                 (syncDelta, cookie) -> syncDelta.setToken(new SyncToken(cookie)),
-                Optional.ofNullable(token).map(t -> t.getValue().toString().getBytes()).orElse(null),
+                Optional.ofNullable(token).map(t -> Base64.getDecoder().decode(t.getValue().toString())).orElse(null),
                 options);
 
         objects.forEach(object -> handler.handle(object.build()));

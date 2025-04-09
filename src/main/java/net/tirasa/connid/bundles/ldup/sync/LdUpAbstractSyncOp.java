@@ -16,6 +16,7 @@
 package net.tirasa.connid.bundles.ldup.sync;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -71,17 +72,15 @@ abstract class LdUpAbstractSyncOp {
 
                 SyncStateControl ssc = (SyncStateControl) entry.getControl(SyncStateControl.OID);
 
-                ConnectorObjectBuilder object = new ConnectorObjectBuilder().
-                        setObjectClass(objectClass).
-                        setUid(new Uid(ssc.getEntryUuid().toString())).
-                        setName(entry.getDn());
-
                 switch (ssc.getSyncState()) {
                     case ADD:
                     case MODIFY:
-                        ldUpUtils.copyAttributes(entry, object);
-                        ldUpUtils.addUserGroups(objectClass, entry.getDn(), object, options);
-                        objects.add(createOrUpdate.apply(object));
+                        objects.add(createOrUpdate.apply(
+                                ldUpUtils.connectorObjectBuilder(
+                                        objectClass,
+                                        new Uid(ssc.getEntryUuid().toString()),
+                                        entry,
+                                        options)));
                         break;
 
                     // this is never reported with persist == false 
@@ -106,21 +105,16 @@ abstract class LdUpAbstractSyncOp {
                                                     filter("entryUUID=" + entryUUID.toString()).
                                                     returnAttributes(ReturnAttributes.NONE.value()).
                                                     build());
-                            if (response.isSuccess()) {
-                                if (response.getEntries().isEmpty()) {
-                                    LOG.ok("No match while searching for entryUUID={0}: it was a DELETE", entryUUID);
+                            if (response.getEntries().isEmpty()) {
+                                LOG.ok("No match while searching for entryUUID={0}: it was a DELETE", entryUUID);
 
-                                    ConnectorObjectBuilder object = new ConnectorObjectBuilder().
-                                            setObjectClass(objectClass).
-                                            setUid(new Uid(entryUUID.toString())).
-                                            setName(entryUUID.toString());
-                                    objects.add(delete.apply(object));
-                                } else {
-                                    LOG.ok("Match found while searching for entryUUID={0}: discard", entryUUID);
-                                }
+                                ConnectorObjectBuilder object = new ConnectorObjectBuilder().
+                                        setObjectClass(objectClass).
+                                        setUid(new Uid(entryUUID.toString())).
+                                        setName(entryUUID.toString());
+                                objects.add(delete.apply(object));
                             } else {
-                                LOG.warn("Unsuccessful response while searching for entryUUID={0}: {1}",
-                                        entryUUID, response);
+                                LOG.ok("Match found while searching for entryUUID={0}: discard", entryUUID);
                             }
                         } catch (LdapException e) {
                             LOG.warn(e, "Error while searching for entryUUID={0}", entryUUID);
@@ -133,7 +127,8 @@ abstract class LdUpAbstractSyncOp {
 
                 SyncDoneControl syncDoneControl = (SyncDoneControl) result.getControl(SyncDoneControl.OID);
 
-                objects.forEach(object -> outCookieReporter.accept(object, new String(syncDoneControl.getCookie())));
+                objects.forEach(object -> outCookieReporter.accept(
+                        object, Base64.getEncoder().encodeToString(syncDoneControl.getCookie())));
             });
             client.setOnException(e -> LOG.error(e, "SyncRepl exception thrown"));
 

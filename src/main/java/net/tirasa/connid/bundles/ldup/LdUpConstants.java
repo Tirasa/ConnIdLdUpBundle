@@ -23,6 +23,8 @@ import org.identityconnectors.framework.common.objects.Uid;
 
 public final class LdUpConstants {
 
+    public static final String DEFAULT_ID_ATTRIBUTE = "entryUUID";
+
     public static final String MEMBERS_ATTR_NAME = AttributeUtil.createSpecialName("MEMBERS");
 
     public static final String LEGACY_GROUPS_ATTR_NAME = "ldapGroups";

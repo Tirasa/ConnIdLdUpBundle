@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.identityconnectors.common.security.SecurityUtil;
 import org.identityconnectors.framework.api.ConnectorFacade;
 import org.identityconnectors.framework.common.objects.Attribute;
 import org.identityconnectors.framework.common.objects.AttributeUtil;
@@ -37,8 +36,6 @@ import org.junit.jupiter.api.Test;
 import org.ldaptive.AddOperation;
 import org.ldaptive.AddRequest;
 import org.ldaptive.AttributeModification;
-import org.ldaptive.BindConnectionInitializer;
-import org.ldaptive.ConnectionConfig;
 import org.ldaptive.DefaultConnectionFactory;
 import org.ldaptive.DeleteOperation;
 import org.ldaptive.DeleteRequest;
@@ -148,17 +145,7 @@ class LdUpLiveSyncOpTests extends AbstractLdUpConnectorTests {
 
     @Test
     void livesync() throws LdapException {
-        LdUpConfiguration conf = newConfiguration();
-
-        ConnectionConfig connectionConfig = ConnectionConfig.builder().
-                url(conf.getUrl()).
-                connectionInitializers(BindConnectionInitializer.builder().
-                        dn(conf.getBindDn()).
-                        credential(SecurityUtil.decrypt(conf.getBindPassword())).
-                        build()).
-                build();
-        SingleConnectionFactory cf = SingleConnectionFactory.builder().config(connectionConfig).build();
-        cf.initialize();
+        SingleConnectionFactory cf = singleConnectionFactory();
 
         String jdoe = "uid=jdoe,ou=People,o=isp";
         AddOperation.builder().
