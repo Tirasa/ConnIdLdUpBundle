@@ -15,15 +15,23 @@
  */
 package net.tirasa.connid.bundles.ldup;
 
+import java.util.List;
+import java.util.Optional;
 import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.common.security.SecurityUtil;
 import org.identityconnectors.framework.api.APIConfiguration;
 import org.identityconnectors.framework.api.ConnectorFacade;
 import org.identityconnectors.framework.api.ConnectorFacadeFactory;
+import org.identityconnectors.framework.common.objects.Attribute;
+import org.identityconnectors.framework.common.objects.ConnectorObject;
 import org.identityconnectors.framework.common.objects.Name;
+import org.identityconnectors.framework.common.objects.ObjectClass;
+import org.identityconnectors.framework.common.objects.OperationOptions;
+import org.identityconnectors.framework.common.objects.OperationOptionsBuilder;
 import org.identityconnectors.framework.common.objects.OperationalAttributes;
 import org.identityconnectors.framework.common.objects.PredefinedAttributes;
 import org.identityconnectors.framework.common.objects.Uid;
+import org.identityconnectors.framework.common.objects.filter.FilterBuilder;
 import org.identityconnectors.test.common.TestHelpers;
 import org.ldaptive.BindConnectionInitializer;
 import org.ldaptive.ConnectionConfig;
@@ -43,6 +51,10 @@ public abstract class AbstractLdUpConnectorTests {
     protected static final String GROUP_OF_UNIQUE_NAMES_CLASS = "groupOfUniqueNames";
 
     protected static final String TEST_GROUP_DN = "cn=Group1,ou=Groups,o=isp";
+
+    protected static final String USER01_DN = "cn=user01,ou=People,o=isp";
+
+    protected static final String USER01_CN = "user01";
 
     protected static final String[] ACCOUNT_ATTRS_TO_GET = {
         Uid.NAME, Name.NAME, OperationalAttributes.PASSWORD_NAME, "uid", "cn", "sn", "givenName", "mail",
@@ -94,5 +106,31 @@ public abstract class AbstractLdUpConnectorTests {
         SingleConnectionFactory cf = SingleConnectionFactory.builder().config(connectionConfig).build();
         cf.initialize();
         return cf;
+    }
+
+    protected static Optional<ConnectorObject> searchByAttribute(
+            final ConnectorFacade facade, final ObjectClass oclass, final Attribute attr) {
+
+        return searchByAttribute(facade, oclass, attr, (OperationOptions) null);
+    }
+
+    protected static Optional<ConnectorObject> searchByAttribute(
+            final ConnectorFacade facade,
+            final ObjectClass oclass,
+            final Attribute attr,
+            final String... attributesToGet) {
+
+        return searchByAttribute(
+                facade, oclass, attr, new OperationOptionsBuilder().setAttributesToGet(attributesToGet).build());
+    }
+
+    protected static Optional<ConnectorObject> searchByAttribute(
+            final ConnectorFacade facade,
+            final ObjectClass oclass,
+            final Attribute attr,
+            final OperationOptions options) {
+
+        List<ConnectorObject> objects = TestHelpers.searchToList(facade, oclass, FilterBuilder.equalTo(attr), options);
+        return objects.stream().findFirst();
     }
 }

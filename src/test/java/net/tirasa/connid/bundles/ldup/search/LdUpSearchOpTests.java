@@ -23,7 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.tirasa.connid.bundles.ldup.AbstractLdUpConnectorTests;
@@ -43,9 +42,7 @@ import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.common.objects.OperationOptionsBuilder;
 import org.identityconnectors.framework.common.objects.SearchResult;
 import org.identityconnectors.framework.common.objects.Uid;
-import org.identityconnectors.framework.common.objects.filter.FilterBuilder;
 import org.identityconnectors.framework.spi.SearchResultsHandler;
-import org.identityconnectors.test.common.TestHelpers;
 import org.identityconnectors.test.common.ToListResultsHandler;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -59,10 +56,6 @@ import org.ldaptive.handler.ResultPredicate;
 
 class LdUpSearchOpTests extends AbstractLdUpConnectorTests {
 
-    private static final String USER01_DN = "cn=user01,ou=People,o=isp";
-
-    private static final String USER01_CN = "user01";
-
     private static final String USER02_DN = "cn=user01,ou=People,o=isp";
 
     private static void searchExpectingNoResult(
@@ -72,32 +65,6 @@ class LdUpSearchOpTests extends AbstractLdUpConnectorTests {
         ToListResultsHandler handler = new ToListResultsHandler();
         searchOp.executeQuery(ObjectClass.ACCOUNT, filter, handler, options);
         assertTrue(handler.getObjects().isEmpty());
-    }
-
-    private static Optional<ConnectorObject> searchByAttribute(
-            final ConnectorFacade facade, final ObjectClass oclass, final Attribute attr) {
-
-        return searchByAttribute(facade, oclass, attr, (OperationOptions) null);
-    }
-
-    private static Optional<ConnectorObject> searchByAttribute(
-            final ConnectorFacade facade,
-            final ObjectClass oclass,
-            final Attribute attr,
-            final String... attributesToGet) {
-
-        return searchByAttribute(
-                facade, oclass, attr, new OperationOptionsBuilder().setAttributesToGet(attributesToGet).build());
-    }
-
-    private static Optional<ConnectorObject> searchByAttribute(
-            final ConnectorFacade facade,
-            final ObjectClass oclass,
-            final Attribute attr,
-            final OperationOptions options) {
-
-        List<ConnectorObject> objects = TestHelpers.searchToList(facade, oclass, FilterBuilder.equalTo(attr), options);
-        return objects.stream().findFirst();
     }
 
     @Test

@@ -20,6 +20,7 @@ import net.tirasa.connid.bundles.ldup.search.LdUpSearchOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpLiveSyncOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpSyncOp;
 import org.identityconnectors.common.logging.Log;
+import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.framework.common.exceptions.ConnectionFailedException;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
@@ -29,11 +30,14 @@ import org.identityconnectors.framework.common.objects.ResultsHandler;
 import org.identityconnectors.framework.common.objects.Schema;
 import org.identityconnectors.framework.common.objects.SyncResultsHandler;
 import org.identityconnectors.framework.common.objects.SyncToken;
+import org.identityconnectors.framework.common.objects.Uid;
 import org.identityconnectors.framework.common.objects.filter.FilterTranslator;
 import org.identityconnectors.framework.spi.Configuration;
 import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.PoolableConnector;
+import org.identityconnectors.framework.spi.operations.AuthenticateOp;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
+import org.identityconnectors.framework.spi.operations.ResolveUsernameOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
 import org.identityconnectors.framework.spi.operations.SearchOp;
 import org.identityconnectors.framework.spi.operations.SyncOp;
@@ -41,13 +45,17 @@ import org.identityconnectors.framework.spi.operations.TestOp;
 
 @ConnectorClass(configurationClass = LdUpConfiguration.class, displayNameKey = "ldup.connector.display")
 public class LdUpConnector
-        implements PoolableConnector, TestOp, SchemaOp, SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
+        implements PoolableConnector, TestOp, SchemaOp,
+        AuthenticateOp, ResolveUsernameOp,
+        SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
 
     protected LdUpUtils ldUpUtils;
 
     protected LdUpSchemaOp ldUpSchema;
+
+    protected LdUpAuthenticateOp ldUpAuthenticateOp;
 
     protected LdUpSearchOp ldUpSearchOp;
 
@@ -69,6 +77,7 @@ public class LdUpConnector
         ldUpUtils.getConfiguration().validate();
 
         ldUpSchema = new LdUpSchemaOp(ldUpUtils);
+        ldUpAuthenticateOp = new LdUpAuthenticateOp(ldUpUtils);
         ldUpSearchOp = new LdUpSearchOp(ldUpUtils);
         ldUpSync = new LdUpSyncOp(ldUpUtils);
         ldUpLiveSync = new LdUpLiveSyncOp(ldUpUtils);
@@ -106,6 +115,25 @@ public class LdUpConnector
     @Override
     public Schema schema() {
         return ldUpSchema.schema();
+    }
+
+    @Override
+    public Uid authenticate(
+            final ObjectClass objectClass,
+            final String username,
+            final GuardedString password,
+            final OperationOptions options) {
+
+        return ldUpAuthenticateOp.authenticate(objectClass, username, password, options);
+    }
+
+    @Override
+    public Uid resolveUsername(
+            final ObjectClass objectClass,
+            final String username,
+            final OperationOptions options) {
+
+        return ldUpAuthenticateOp.resolveUsername(objectClass, username, options);
     }
 
     @Override
