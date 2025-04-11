@@ -15,6 +15,8 @@
  */
 package net.tirasa.connid.bundles.ldup;
 
+import java.util.Set;
+import net.tirasa.connid.bundles.ldup.modify.LdUpCreateOp;
 import net.tirasa.connid.bundles.ldup.search.LdUpFilter;
 import net.tirasa.connid.bundles.ldup.search.LdUpSearchOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpLiveSyncOp;
@@ -23,6 +25,7 @@ import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.framework.common.exceptions.ConnectionFailedException;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
+import org.identityconnectors.framework.common.objects.Attribute;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.OperationOptions;
@@ -36,6 +39,7 @@ import org.identityconnectors.framework.spi.Configuration;
 import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.PoolableConnector;
 import org.identityconnectors.framework.spi.operations.AuthenticateOp;
+import org.identityconnectors.framework.spi.operations.CreateOp;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
 import org.identityconnectors.framework.spi.operations.ResolveUsernameOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
@@ -47,6 +51,7 @@ import org.identityconnectors.framework.spi.operations.TestOp;
 public class LdUpConnector
         implements PoolableConnector, TestOp, SchemaOp,
         AuthenticateOp, ResolveUsernameOp,
+        CreateOp,
         SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
@@ -56,6 +61,8 @@ public class LdUpConnector
     protected LdUpSchemaOp ldUpSchema;
 
     protected LdUpAuthenticateOp ldUpAuthenticateOp;
+
+    protected LdUpCreateOp ldUCreateOp;
 
     protected LdUpSearchOp ldUpSearchOp;
 
@@ -78,6 +85,7 @@ public class LdUpConnector
 
         ldUpSchema = new LdUpSchemaOp(ldUpUtils);
         ldUpAuthenticateOp = new LdUpAuthenticateOp(ldUpUtils);
+        ldUCreateOp = new LdUpCreateOp(ldUpUtils);
         ldUpSearchOp = new LdUpSearchOp(ldUpUtils);
         ldUpSync = new LdUpSyncOp(ldUpUtils);
         ldUpLiveSync = new LdUpLiveSyncOp(ldUpUtils);
@@ -134,6 +142,15 @@ public class LdUpConnector
             final OperationOptions options) {
 
         return ldUpAuthenticateOp.resolveUsername(objectClass, username, options);
+    }
+
+    @Override
+    public Uid create(
+            final ObjectClass objectClass,
+            final Set<Attribute> createAttributes,
+            final OperationOptions options) {
+
+        return ldUCreateOp.create(objectClass, createAttributes, options);
     }
 
     @Override

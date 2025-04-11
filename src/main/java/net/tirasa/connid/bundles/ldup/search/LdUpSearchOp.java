@@ -17,7 +17,6 @@ package net.tirasa.connid.bundles.ldup.search;
 
 import java.util.Base64;
 import java.util.Optional;
-import net.tirasa.connid.bundles.ldup.LdUpConstants;
 import net.tirasa.connid.bundles.ldup.LdUpUtils;
 import org.identityconnectors.common.logging.Log;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
@@ -103,11 +102,10 @@ public class LdUpSearchOp implements SearchOp<LdUpFilter> {
             request.setControls(prc);
         }
 
-        String uidAttr = ldUpUtils.getLdapAttribute(objectClass, Uid.NAME).
-                orElse(LdUpConstants.DEFAULT_ID_ATTRIBUTE);
+        String idAttr = ldUpUtils.getIdAttribute(objectClass);
         request.setReturnAttributes(ldUpUtils.returnAttributes(options).
                 map(attrs -> {
-                    attrs.add(uidAttr);
+                    attrs.add(idAttr);
                     return attrs.toArray(String[]::new);
                 }).
                 orElse(ReturnAttributes.ALL.value()));
@@ -121,9 +119,9 @@ public class LdUpSearchOp implements SearchOp<LdUpFilter> {
                     build().execute(request);
 
             response.getEntries().forEach(entry -> {
-                Uid uid = Optional.ofNullable(entry.getAttribute(uidAttr)).
+                Uid uid = Optional.ofNullable(entry.getAttribute(idAttr)).
                         map(attr -> new Uid(attr.getStringValue())).
-                        orElseThrow(() -> new IllegalArgumentException("Could not fetch " + uidAttr + " value"));
+                        orElseThrow(() -> new IllegalArgumentException("Could not fetch " + idAttr + " value"));
 
                 handler.handle(ldUpUtils.connectorObjectBuilder(objectClass, uid, entry, options).build());
             });

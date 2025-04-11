@@ -37,7 +37,7 @@ import org.ldaptive.control.SyncDoneControl;
 import org.ldaptive.control.util.DefaultCookieManager;
 import org.ldaptive.control.util.SyncReplClient;
 
-public class LdUpSyncOp extends LdUpAbstractSyncOp implements SyncOp {
+public class LdUpSyncOp extends AbstractLdUpSyncOp implements SyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpSyncOp.class);
 

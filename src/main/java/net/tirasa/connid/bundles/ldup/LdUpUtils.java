@@ -133,19 +133,29 @@ public class LdUpUtils {
         return connectionFactory;
     }
 
+    public boolean isAccount(final ObjectClass objectClass) {
+        return objectClass.equals(ObjectClass.ACCOUNT)
+                || configuration.getAccountObjectClass().equals(objectClass.getObjectClassValue());
+    }
+
+    public boolean isGroup(final ObjectClass objectClass) {
+        return objectClass.equals(ObjectClass.GROUP)
+                || configuration.getGroupObjectClass().equals(objectClass.getObjectClassValue());
+    }
+
+    public String getIdAttribute(final ObjectClass objectClass) {
+        if (isAccount(objectClass)) {
+            return configuration.getUidAttribute();
+        }
+        if (isGroup(objectClass)) {
+            return configuration.getGidAttribute();
+        }
+        return configuration.getAidAttribute();
+    }
+
     public Optional<String> getLdapAttribute(final ObjectClass objectClass, final String attribute) {
         if (AttributeUtil.namesEqual(Uid.NAME, attribute)) {
-            if (configuration.getAccountObjectClass().equals(objectClass.getObjectClassValue())
-                    || ObjectClass.ACCOUNT.equals(objectClass)) {
-
-                return Optional.of(configuration.getUidAttribute());
-            }
-            if (configuration.getGroupObjectClass().equals(objectClass.getObjectClassValue())
-                    || ObjectClass.GROUP.equals(objectClass)) {
-
-                return Optional.of(configuration.getGidAttribute());
-            }
-            return Optional.of(LdUpConstants.DEFAULT_ID_ATTRIBUTE);
+            return Optional.of(getIdAttribute(objectClass));
         } else if (AttributeUtil.namesEqual(Name.NAME, attribute)) {
             return Optional.of("entryDN");
         } else if (OperationalAttributes.PASSWORD_NAME.equals(attribute)) {
@@ -222,20 +232,22 @@ public class LdUpUtils {
         });
     }
 
-    protected void addUserGroups(
+    protected void addAccountGroups(
             final ObjectClass objectClass,
             final String userDn,
             final ConnectorObjectBuilder user,
             final OperationOptions options) {
 
         // not an user, skip
-        if (!configuration.getAccountObjectClass().equals(objectClass.getObjectClassValue())) {
+        if (!isAccount(objectClass)) {
             return;
         }
 
         // no groups requested, skip
         if (Optional.ofNullable(options.getAttributesToGet()).
-                map(attrs -> Stream.of(attrs).noneMatch(PredefinedAttributes.GROUPS_NAME::equals)).
+                map(attrs -> Stream.of(attrs).noneMatch(attr -> configuration.isLegacyCompatibilityMode()
+                ? LdUpConstants.LEGACY_GROUPS_ATTR_NAME.equals(attr)
+                : PredefinedAttributes.GROUPS_NAME.equals(attr))).
                 orElse(false)) {
 
             return;
@@ -285,7 +297,7 @@ public class LdUpUtils {
                 setName(entry.getDn());
 
         copyAttributes(entry, object, returnAttributes(options));
-        addUserGroups(objectClass, entry.getDn(), object, options);
+        addAccountGroups(objectClass, entry.getDn(), object, options);
 
         return object;
     }

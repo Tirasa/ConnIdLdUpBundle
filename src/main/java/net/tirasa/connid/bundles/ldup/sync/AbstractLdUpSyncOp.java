@@ -42,13 +42,13 @@ import org.ldaptive.control.util.SyncReplClient;
 import org.ldaptive.extended.SyncInfoMessage;
 import org.ldaptive.handler.ResultPredicate;
 
-abstract class LdUpAbstractSyncOp {
+abstract class AbstractLdUpSyncOp {
 
-    protected static final Log LOG = Log.getLog(LdUpAbstractSyncOp.class);
+    protected static final Log LOG = Log.getLog(AbstractLdUpSyncOp.class);
 
     protected final LdUpUtils ldUpUtils;
 
-    protected LdUpAbstractSyncOp(final LdUpUtils ldUpUtils) {
+    protected AbstractLdUpSyncOp(final LdUpUtils ldUpUtils) {
         this.ldUpUtils = ldUpUtils;
     }
 

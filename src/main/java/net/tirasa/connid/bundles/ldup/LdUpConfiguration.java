@@ -23,6 +23,8 @@ import org.identityconnectors.framework.spi.ConfigurationProperty;
 
 public class LdUpConfiguration extends AbstractConfiguration {
 
+    private static final String DEFAULT_ID_ATTRIBUTE = "entryUUID";
+
     private String url;
 
     private boolean useStartTLS = false;
@@ -47,9 +49,11 @@ public class LdUpConfiguration extends AbstractConfiguration {
 
     private String groupObjectClass = "groupOfUniqueNames";
 
-    private String uidAttribute = LdUpConstants.DEFAULT_ID_ATTRIBUTE;
+    private String uidAttribute = DEFAULT_ID_ATTRIBUTE;
 
-    private String gidAttribute = LdUpConstants.DEFAULT_ID_ATTRIBUTE;
+    private String gidAttribute = DEFAULT_ID_ATTRIBUTE;
+
+    private String aidAttribute = DEFAULT_ID_ATTRIBUTE;
 
     private String passwordAttribute = "userPassword";
 
@@ -197,8 +201,18 @@ public class LdUpConfiguration extends AbstractConfiguration {
         this.gidAttribute = gidAttribute;
     }
 
+    @ConfigurationProperty(displayMessageKey = "aidAttribute.display",
+            helpMessageKey = "aidAttribute.help", required = true, order = 15)
+    public String getAidAttribute() {
+        return aidAttribute;
+    }
+
+    public void setAidAttribute(final String aidAttribute) {
+        this.aidAttribute = aidAttribute;
+    }
+
     @ConfigurationProperty(displayMessageKey = "passwordAttribute.display",
-            helpMessageKey = "passwordAttribute.help", required = true, order = 15)
+            helpMessageKey = "passwordAttribute.help", required = true, order = 16)
     public String getPasswordAttribute() {
         return passwordAttribute;
     }
@@ -208,7 +222,7 @@ public class LdUpConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(displayMessageKey = "groupMemberAttribute.display",
-            helpMessageKey = "groupMemberAttribute.help", required = true, order = 16)
+            helpMessageKey = "groupMemberAttribute.help", required = true, order = 17)
     public String getGroupMemberAttribute() {
         return groupMemberAttribute;
     }
@@ -218,7 +232,7 @@ public class LdUpConfiguration extends AbstractConfiguration {
     }
 
     @ConfigurationProperty(displayMessageKey = "legacyCompatibilityMode.display",
-            helpMessageKey = "legacyCompatibilityMode.help", order = 17)
+            helpMessageKey = "legacyCompatibilityMode.help", order = 18)
     public boolean isLegacyCompatibilityMode() {
         return legacyCompatibilityMode;
     }

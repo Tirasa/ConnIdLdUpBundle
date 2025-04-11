@@ -29,7 +29,7 @@ import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.OperationOptions;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
 
-public class LdUpLiveSyncOp extends LdUpAbstractSyncOp implements LiveSyncOp {
+public class LdUpLiveSyncOp extends AbstractLdUpSyncOp implements LiveSyncOp {
 
     public LdUpLiveSyncOp(final LdUpUtils ldUpUtils) {
         super(ldUpUtils);
