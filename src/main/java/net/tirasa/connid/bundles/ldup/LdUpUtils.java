@@ -269,7 +269,7 @@ public class LdUpUtils {
             if (configuration.isLegacyCompatibilityMode()) {
                 user.addAttribute(AttributeBuilder.build(
                         LdUpConstants.LEGACY_GROUPS_ATTR_NAME,
-                        response.getEntries().stream().map(LdapEntry::getDn).collect(Collectors.toSet())));
+                        response.getEntryDns()));
             } else {
                 Set<ConnectorObjectReference> groups = response.getEntries().stream().
                         map(LdapEntry::getDn).

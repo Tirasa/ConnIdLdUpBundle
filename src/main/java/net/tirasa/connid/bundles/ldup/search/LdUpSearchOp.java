@@ -62,7 +62,8 @@ public class LdUpSearchOp implements SearchOp<LdUpFilter> {
             final ResultsHandler handler,
             final OperationOptions options) {
 
-        LdUpFilter actualFilter = filter == null ? LdUpFilter.forNativeFilter("objectClass=*") : filter;
+        LdUpFilter actualFilter = Optional.ofNullable(filter).
+                orElseGet(() -> LdUpFilter.forNativeFilter("objectClass=" + ldUpUtils.ldapObjectClass(objectClass)));
         if (actualFilter.getEntryDN() == null && actualFilter.getNativeFilter() == null) {
             throw new ConnectorException("Invalid search filter");
         }
@@ -92,7 +93,11 @@ public class LdUpSearchOp implements SearchOp<LdUpFilter> {
                     filter("(&(objectClass=" + ldUpUtils.ldapObjectClass(objectClass) + ")(" + nativeFilter + "))").
                     build();
         } else {
-            request = SearchRequest.objectScopeSearchRequest(actualFilter.getEntryDN());
+            request = SearchRequest.builder().
+                    dn(actualFilter.getEntryDN()).
+                    scope(SearchScope.OBJECT).
+                    filter("objectClass=" + ldUpUtils.ldapObjectClass(objectClass)).
+                    build();
         }
 
         if (options.getPageSize() != null) {

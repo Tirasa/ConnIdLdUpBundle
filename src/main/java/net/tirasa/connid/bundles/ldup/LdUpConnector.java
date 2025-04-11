@@ -17,6 +17,7 @@ package net.tirasa.connid.bundles.ldup;
 
 import java.util.Set;
 import net.tirasa.connid.bundles.ldup.modify.LdUpCreateOp;
+import net.tirasa.connid.bundles.ldup.modify.LdUpDeleteOp;
 import net.tirasa.connid.bundles.ldup.search.LdUpFilter;
 import net.tirasa.connid.bundles.ldup.search.LdUpSearchOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpLiveSyncOp;
@@ -40,6 +41,7 @@ import org.identityconnectors.framework.spi.ConnectorClass;
 import org.identityconnectors.framework.spi.PoolableConnector;
 import org.identityconnectors.framework.spi.operations.AuthenticateOp;
 import org.identityconnectors.framework.spi.operations.CreateOp;
+import org.identityconnectors.framework.spi.operations.DeleteOp;
 import org.identityconnectors.framework.spi.operations.LiveSyncOp;
 import org.identityconnectors.framework.spi.operations.ResolveUsernameOp;
 import org.identityconnectors.framework.spi.operations.SchemaOp;
@@ -51,7 +53,7 @@ import org.identityconnectors.framework.spi.operations.TestOp;
 public class LdUpConnector
         implements PoolableConnector, TestOp, SchemaOp,
         AuthenticateOp, ResolveUsernameOp,
-        CreateOp,
+        CreateOp, DeleteOp,
         SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
@@ -62,7 +64,9 @@ public class LdUpConnector
 
     protected LdUpAuthenticateOp ldUpAuthenticateOp;
 
-    protected LdUpCreateOp ldUCreateOp;
+    protected LdUpCreateOp ldUpCreateOp;
+
+    protected LdUpDeleteOp ldUpDeleteOp;
 
     protected LdUpSearchOp ldUpSearchOp;
 
@@ -85,7 +89,8 @@ public class LdUpConnector
 
         ldUpSchema = new LdUpSchemaOp(ldUpUtils);
         ldUpAuthenticateOp = new LdUpAuthenticateOp(ldUpUtils);
-        ldUCreateOp = new LdUpCreateOp(ldUpUtils);
+        ldUpCreateOp = new LdUpCreateOp(ldUpUtils);
+        ldUpDeleteOp = new LdUpDeleteOp(ldUpUtils);
         ldUpSearchOp = new LdUpSearchOp(ldUpUtils);
         ldUpSync = new LdUpSyncOp(ldUpUtils);
         ldUpLiveSync = new LdUpLiveSyncOp(ldUpUtils);
@@ -150,7 +155,16 @@ public class LdUpConnector
             final Set<Attribute> createAttributes,
             final OperationOptions options) {
 
-        return ldUCreateOp.create(objectClass, createAttributes, options);
+        return ldUpCreateOp.create(objectClass, createAttributes, options);
+    }
+
+    @Override
+    public void delete(
+            final ObjectClass objectClass,
+            final Uid uid,
+            final OperationOptions options) {
+
+        ldUpDeleteOp.delete(objectClass, uid, options);
     }
 
     @Override

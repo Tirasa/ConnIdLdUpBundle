@@ -169,32 +169,28 @@ public class LdUpCreateOp implements CreateOp {
                     ExtendedOperation.builder().
                             factory(ldUpUtils.getConnectionFactory()).
                             throwIf(ResultPredicate.NOT_SUCCESS).
-                            build().
-                            execute(new PasswordModifyRequest(name.getNameValue(), null, passwordValue.get()));
+                            build().execute(new PasswordModifyRequest(name.getNameValue(), null, passwordValue.get()));
                 } catch (LdapException e) {
                     throw new ConnectorException("Set password error", e);
                 }
             }
 
             // 3. set group memberships if provided
-            if (!groups.isEmpty()) {
-                for (String group : groups) {
-                    try {
-                        ModifyOperation.builder().
-                                factory(ldUpUtils.getConnectionFactory()).
-                                throwIf(ResultPredicate.NOT_SUCCESS).
-                                build().
-                                execute(ModifyRequest.builder().
-                                        dn(group).
-                                        modifications(new AttributeModification(
-                                                AttributeModification.Type.ADD,
-                                                new LdapAttribute(
-                                                        ldUpUtils.getConfiguration().getGroupMemberAttribute(),
-                                                        name.getNameValue()))).
-                                        build());
-                    } catch (LdapException e) {
-                        throw new ConnectorException("While adding " + name.getNameValue() + " to " + group, e);
-                    }
+            for (String group : groups) {
+                try {
+                    ModifyOperation.builder().
+                            factory(ldUpUtils.getConnectionFactory()).
+                            throwIf(ResultPredicate.NOT_SUCCESS).
+                            build().execute(ModifyRequest.builder().
+                                    dn(group).
+                                    modifications(new AttributeModification(
+                                            AttributeModification.Type.ADD,
+                                            new LdapAttribute(
+                                                    ldUpUtils.getConfiguration().getGroupMemberAttribute(),
+                                                    name.getNameValue()))).
+                                    build());
+                } catch (LdapException e) {
+                    throw new ConnectorException("While adding " + name.getNameValue() + " to " + group, e);
                 }
             }
         }
