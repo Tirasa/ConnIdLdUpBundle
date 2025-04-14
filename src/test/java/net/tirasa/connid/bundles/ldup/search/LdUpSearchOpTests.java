@@ -22,13 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import net.tirasa.connid.bundles.ldup.AbstractLdUpConnectorTests;
 import net.tirasa.connid.bundles.ldup.LdUpConfiguration;
 import net.tirasa.connid.bundles.ldup.LdUpUtils;
-import org.identityconnectors.common.CollectionUtil;
 import org.identityconnectors.framework.api.ConnectorFacade;
 import org.identityconnectors.framework.common.objects.Attribute;
 import org.identityconnectors.framework.common.objects.AttributeBuilder;
@@ -181,7 +181,7 @@ class LdUpSearchOpTests extends AbstractLdUpConnectorTests {
         ConnectorObject object = searchByAttribute(
                 facade, ObjectClass.ACCOUNT, new Name(USER02_DN), "employeeNumber", "telephoneNumber").orElseThrow();
 
-        Set<Attribute> attrs = CollectionUtil.newSet(object.getAttributes());
+        Set<Attribute> attrs = new HashSet<>(object.getAttributes());
         assertTrue(attrs.remove(AttributeUtil.find(Uid.NAME, attrs)));
         assertTrue(attrs.remove(AttributeUtil.find(Name.NAME, attrs)));
         assertTrue(attrs.remove(AttributeUtil.find("employeeNumber", attrs)));

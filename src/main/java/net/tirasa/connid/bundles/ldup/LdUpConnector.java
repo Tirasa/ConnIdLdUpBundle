@@ -18,6 +18,7 @@ package net.tirasa.connid.bundles.ldup;
 import java.util.Set;
 import net.tirasa.connid.bundles.ldup.modify.LdUpCreateOp;
 import net.tirasa.connid.bundles.ldup.modify.LdUpDeleteOp;
+import net.tirasa.connid.bundles.ldup.modify.LdUpUpdateOp;
 import net.tirasa.connid.bundles.ldup.search.LdUpFilter;
 import net.tirasa.connid.bundles.ldup.search.LdUpSearchOp;
 import net.tirasa.connid.bundles.ldup.sync.LdUpLiveSyncOp;
@@ -27,6 +28,7 @@ import org.identityconnectors.common.security.GuardedString;
 import org.identityconnectors.framework.common.exceptions.ConnectionFailedException;
 import org.identityconnectors.framework.common.exceptions.ConnectorException;
 import org.identityconnectors.framework.common.objects.Attribute;
+import org.identityconnectors.framework.common.objects.AttributeDelta;
 import org.identityconnectors.framework.common.objects.LiveSyncResultsHandler;
 import org.identityconnectors.framework.common.objects.ObjectClass;
 import org.identityconnectors.framework.common.objects.OperationOptions;
@@ -48,12 +50,15 @@ import org.identityconnectors.framework.spi.operations.SchemaOp;
 import org.identityconnectors.framework.spi.operations.SearchOp;
 import org.identityconnectors.framework.spi.operations.SyncOp;
 import org.identityconnectors.framework.spi.operations.TestOp;
+import org.identityconnectors.framework.spi.operations.UpdateAttributeValuesOp;
+import org.identityconnectors.framework.spi.operations.UpdateDeltaOp;
+import org.identityconnectors.framework.spi.operations.UpdateOp;
 
 @ConnectorClass(configurationClass = LdUpConfiguration.class, displayNameKey = "ldup.connector.display")
 public class LdUpConnector
         implements PoolableConnector, TestOp, SchemaOp,
         AuthenticateOp, ResolveUsernameOp,
-        CreateOp, DeleteOp,
+        CreateOp, UpdateOp, UpdateDeltaOp, UpdateAttributeValuesOp, DeleteOp,
         SearchOp<LdUpFilter>, SyncOp, LiveSyncOp {
 
     protected static final Log LOG = Log.getLog(LdUpConnector.class);
@@ -65,6 +70,8 @@ public class LdUpConnector
     protected LdUpAuthenticateOp ldUpAuthenticateOp;
 
     protected LdUpCreateOp ldUpCreateOp;
+
+    protected LdUpUpdateOp ldUpUpdateOp;
 
     protected LdUpDeleteOp ldUpDeleteOp;
 
@@ -90,6 +97,7 @@ public class LdUpConnector
         ldUpSchema = new LdUpSchemaOp(ldUpUtils);
         ldUpAuthenticateOp = new LdUpAuthenticateOp(ldUpUtils);
         ldUpCreateOp = new LdUpCreateOp(ldUpUtils);
+        ldUpUpdateOp = new LdUpUpdateOp(ldUpUtils);
         ldUpDeleteOp = new LdUpDeleteOp(ldUpUtils);
         ldUpSearchOp = new LdUpSearchOp(ldUpUtils);
         ldUpSync = new LdUpSyncOp(ldUpUtils);
@@ -156,6 +164,46 @@ public class LdUpConnector
             final OperationOptions options) {
 
         return ldUpCreateOp.create(objectClass, createAttributes, options);
+    }
+
+    @Override
+    public Uid update(
+            final ObjectClass objectClass,
+            final Uid uid,
+            final Set<Attribute> replaceAttributes,
+            final OperationOptions options) {
+
+        return ldUpUpdateOp.update(objectClass, uid, replaceAttributes, options);
+    }
+
+    @Override
+    public Set<AttributeDelta> updateDelta(
+            final ObjectClass objclass,
+            final Uid uid,
+            final Set<AttributeDelta> modifications,
+            final OperationOptions options) {
+
+        return ldUpUpdateOp.updateDelta(objclass, uid, modifications, options);
+    }
+
+    @Override
+    public Uid addAttributeValues(
+            final ObjectClass objclass,
+            final Uid uid,
+            final Set<Attribute> valuesToAdd,
+            final OperationOptions options) {
+
+        return ldUpUpdateOp.addAttributeValues(objclass, uid, valuesToAdd, options);
+    }
+
+    @Override
+    public Uid removeAttributeValues(
+            final ObjectClass objclass,
+            final Uid uid,
+            final Set<Attribute> valuesToRemove,
+            final OperationOptions options) {
+
+        return ldUpUpdateOp.removeAttributeValues(objclass, uid, valuesToRemove, options);
     }
 
     @Override

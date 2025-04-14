@@ -57,8 +57,7 @@ class LdUpLiveSyncOpTests extends AbstractLdUpConnectorTests {
         AddOperation.builder().
                 factory(cf).
                 throwIf(ResultPredicate.NOT_SUCCESS).
-                build().
-                execute(AddRequest.builder().
+                build().execute(AddRequest.builder().
                         dn(userDn).
                         attributes(
                                 new LdapAttribute("objectClass", INET_ORG_PERSON_CLASS),
@@ -82,8 +81,7 @@ class LdUpLiveSyncOpTests extends AbstractLdUpConnectorTests {
         ModifyOperation.builder().
                 factory(cf).
                 throwIf(ResultPredicate.NOT_SUCCESS).
-                build().
-                execute(ModifyRequest.builder().
+                build().execute(ModifyRequest.builder().
                         dn(userDn).
                         modifications(
                                 new AttributeModification(AttributeModification.Type.ADD,
@@ -95,8 +93,7 @@ class LdUpLiveSyncOpTests extends AbstractLdUpConnectorTests {
         ModifyOperation.builder().
                 factory(cf).
                 throwIf(ResultPredicate.NOT_SUCCESS).
-                build().
-                execute(ModifyRequest.builder().
+                build().execute(ModifyRequest.builder().
                         dn(TEST_GROUP_DN).
                         modifications(
                                 new AttributeModification(AttributeModification.Type.ADD,
@@ -114,8 +111,7 @@ class LdUpLiveSyncOpTests extends AbstractLdUpConnectorTests {
         ModifyOperation.builder().
                 factory(cf).
                 throwIf(ResultPredicate.NOT_SUCCESS).
-                build().
-                execute(ModifyRequest.builder().
+                build().execute(ModifyRequest.builder().
                         dn(TEST_GROUP_DN).
                         modifications(
                                 new AttributeModification(AttributeModification.Type.DELETE,
