@@ -23,7 +23,7 @@
   <parent>
     <groupId>net.tirasa.connid</groupId>
     <artifactId>connid</artifactId>
-    <version>1.6.0.0</version>
+    <version>1.6.0.1</version>
   </parent>
     
   <groupId>net.tirasa.connid.bundles</groupId>
@@ -62,21 +62,8 @@
     <url>https://github.com/Tirasa/ConnIdLdUpBundle/actions</url>
   </ciManagement>
 
-  <mailingLists>
-    <mailingList>
-      <name>connid-dev</name>
-      <post>connid-dev@googlegroups.com</post>
-      <archive>http://groups.google.com/group/connid-dev</archive>
-    </mailingList>
-    <mailingList>
-      <name>connid-users</name>
-      <post>connid-users@googlegroups.com</post>
-      <archive>http://groups.google.com/group/connid-users</archive>
-    </mailingList>
-  </mailingLists>
-
   <properties>
-    <connid.version>1.6.0.0</connid.version>
+    <connid.version>1.6.0.1</connid.version>
     <ldaptive.version>2.4.1</ldaptive.version>
     <testcontainers.version>1.20.6</testcontainers.version>
 
@@ -316,16 +303,4 @@
       </resource>
     </resources>    
   </build>
-
-  <repositories>
-    <repository>
-      <id>sonatype</id>
-      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-      <releases>
-        <enabled>false</enabled>
-      </releases>
-      <snapshots>
-      </snapshots>
-    </repository>
-  </repositories>
 </project>
