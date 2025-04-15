@@ -28,7 +28,7 @@
     
   <groupId>net.tirasa.connid.bundles</groupId>
   <artifactId>net.tirasa.connid.bundles.ldup</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 
   <name>ConnId Bundles: LdUp</name>
             
@@ -49,7 +49,7 @@
     <connection>scm:git:git@github.com:Tirasa/ConnIdLdUpBundle.git</connection>
     <url>scm:git:git@github.com:Tirasa/ConnIdLdUpBundle.git</url>
     <developerConnection>scm:git:git@github.com:Tirasa/ConnIdLdUpBundle.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>net.tirasa.connid.bundles.ldup-0.1.0</tag>
   </scm>
 
   <issueManagement>
