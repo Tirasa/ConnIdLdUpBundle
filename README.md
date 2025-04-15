@@ -24,7 +24,7 @@ The LdUp bundle is part of the [ConnId](http://connid.tirasa.net) project.
   <img src="https://github.com/Tirasa/ConnIdLdUpBundle/actions/workflows/ci.yml/badge.svg"/>
 </a>
 <a href="#">
-  <img src="https://img.shields.io/maven-central/v/net.tirasa.connid.bundles/net.tirasa.connid.bundles.LdUp.svg"/>
+  <img src="https://img.shields.io/maven-central/v/net.tirasa.connid.bundles/net.tirasa.connid.bundles.ldup.svg"/>
 </a>
 
 ## How to get it
@@ -39,7 +39,7 @@ The LdUp bundle is part of the [ConnId](http://connid.tirasa.net) project.
 </dependency>
 ```
 
-where `connid.ldup.version` is one of [available](http://repo1.maven.org/maven2/net/tirasa/connid/bundles/net.tirasa.connid.bundles.ldup/).
+where `connid.ldup.version` is one of [available](https://repo1.maven.org/maven2/net/tirasa/connid/bundles/net.tirasa.connid.bundles.ldup/).
 
 ### Downloads
 
