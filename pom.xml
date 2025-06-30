@@ -65,7 +65,7 @@
   <properties>
     <connid.version>1.6.0.1</connid.version>
     <ldaptive.version>2.4.1</ldaptive.version>
-    <testcontainers.version>1.21.2</testcontainers.version>
+    <testcontainers.version>1.21.3</testcontainers.version>
 
     <targetJdk>11</targetJdk>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
