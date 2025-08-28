@@ -65,7 +65,7 @@ public abstract class AbstractLdUpConnectorTests {
 
     @Container
     protected static GenericContainer<?> LDAP_CONTAINER = new GenericContainer<>(
-            DockerImageName.parse("bitnami/openldap:2.6")).
+            DockerImageName.parse("bitnamilegacy/openldap:2.6")).
             waitingFor(Wait.forLogMessage(".*slapd starting.*", 1)).
             withEnv("LDAP_ROOT", "o=isp").
             withEnv("LDAP_USER_OU", "People").
