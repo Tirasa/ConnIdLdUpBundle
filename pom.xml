@@ -64,7 +64,7 @@
 
   <properties>
     <connid.version>1.6.1.0</connid.version>
-    <ldaptive.version>2.4.2</ldaptive.version>
+    <ldaptive.version>2.5.0</ldaptive.version>
     <testcontainers.version>1.21.4</testcontainers.version>
 
     <targetJdk>11</targetJdk>
