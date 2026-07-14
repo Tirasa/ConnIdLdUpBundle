@@ -63,7 +63,7 @@
   </ciManagement>
 
   <properties>
-    <connid.version>1.6.1.0</connid.version>
+    <connid.version>1.6.1.1</connid.version>
     <ldaptive.version>2.5.1</ldaptive.version>
     <testcontainers.version>1.21.4</testcontainers.version>
 
